@@ -130,11 +130,11 @@ public class PctDrawList : IDisposable
         _renderer.DrawTriangle(a, b, c, colorA, colorB, colorC);
     }
 
-    public void AddLine(Vector3 start, Vector3 stop, float halfWidth, uint color)
+    public void AddLine(Vector3 start, Vector3 stop, float halfWidth, uint color, float thickness = 2)
     {
         Vector3 direction = stop - start;
         Vector3 perpendicular = halfWidth * Vector3.Normalize(Vector3.Cross(direction, Vector3.UnitY));
-        AddQuad(start - perpendicular, stop - perpendicular, stop + perpendicular, start + perpendicular, color);
+        AddQuad(start - perpendicular, stop - perpendicular, stop + perpendicular, start + perpendicular, color, thickness);
     }
 
     public void AddLineFilled(Vector3 start, Vector3 stop, float halfWidth, uint color, uint? outerColor = null)
@@ -144,13 +144,13 @@ public class PctDrawList : IDisposable
         AddQuadFilled(start - perpendicular, stop - perpendicular, stop + perpendicular, start + perpendicular, color, outerColor ?? color, outerColor ?? color, color);
     }
 
-    public void AddQuad(Vector3 a, Vector3 b, Vector3 c, Vector3 d, uint color)
+    public void AddQuad(Vector3 a, Vector3 b, Vector3 c, Vector3 d, uint color, float thickness = 2)
     {
         PathLineTo(a);
         PathLineTo(b);
         PathLineTo(c);
         PathLineTo(d);
-        PathStroke(color, PctStrokeFlags.Closed);
+        PathStroke(color, PctStrokeFlags.Closed, thickness);
     }
 
     public void AddQuadFilled(Vector3 a, Vector3 b, Vector3 c, Vector3 d, uint color)
