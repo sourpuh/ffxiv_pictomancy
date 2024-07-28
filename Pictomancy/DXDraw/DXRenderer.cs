@@ -7,7 +7,7 @@ namespace Pictomancy.DXDraw;
 
 internal class DXRenderer : IDisposable
 {
-    public const int MAX_FANS = 1024;
+    public const int MAX_FANS = 2048;
     public const int MAX_TRIS = 1024;
     public const int MAX_STROKE_SEGMENTS = MAX_FANS * Stroke.MAXIMUM_ARC_SEGMENTS;
     public const int MAX_CLIP_ZONES = 256 * 6;
