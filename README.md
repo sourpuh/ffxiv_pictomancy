@@ -16,7 +16,7 @@ Library initialization:
 ```c#
 public MyPlugin(DalamudPluginInterface pluginInterface)
 {
-    pluginInterface.Create<PictoService>();
+    PictoService.Initialize(pluginInterface);
 
     ... Your Code Here ...
 }

@@ -19,11 +19,18 @@ public class PictoService
     [PluginService] public static IPluginLog Log { get; private set; }
     [PluginService] public static IAddonLifecycle AddonLifecycle { get; private set; }
 
-    private static readonly Lazy<AddonClipper> _addonClipper = new();
-    private static readonly Lazy<DXRenderer> _renderer = new();
+    private static DXRenderer _renderer;
+    private static AddonClipper _addonClipper;
 
     internal static PctDrawList DrawList;
     internal static PctDrawHints Hints;
+
+    public static void Initialize(IDalamudPluginInterface pluginInterface)
+    {
+        pluginInterface.Create<PictoService>();
+        _renderer = new();
+        _addonClipper = new();
+    }
 
     /// <summary>
     /// Helper for getting the current drawlist so it does not need to be passed around.
@@ -52,19 +59,16 @@ public class PictoService
         if (hints.DrawInCutscene || IsInCutscene()) return null;
         if (hints.DrawWhenFaded || IsFaded()) return null;
 
-        var renderer = _renderer.Value;
-        var clip = _addonClipper.Value;
         return DrawList = new PctDrawList(
             imguidrawlist ?? ImGui.GetBackgroundDrawList(),
-            renderer,
-            clip
+            _renderer,
+            _addonClipper
         );
     }
 
     public static void Dispose()
     {
-        if (_renderer.IsValueCreated)
-            _renderer.Value.Dispose();
+        _renderer.Dispose();
     }
 
     private static bool IsInCutscene()
