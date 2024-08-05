@@ -24,8 +24,7 @@ internal class AddonClipper
         ClipMainTargetInfo();
         ClipTargetInfoCastBar();
         ClipActionBars();
-        // Visibility for this addon doesn't seem to work. Disabled until there is a way to hide it.
-        // ClipActionCross();
+        ClipActionCross();
         ClipPartyList();
         ClipChatBubbles();
         ClipEnemyList();
@@ -157,16 +156,40 @@ internal class AddonClipper
 
     private unsafe void ClipActionCross()
     {
-        AtkUnitBase* addon = (AtkUnitBase*)PictoService.GameGui.GetAddonByName("_ActionCross", 1);
-        if (addon == null || !addon->IsVisible || addon->UldManager.NodeListCount < 11) return;
-        for (int i = 8; i <= 11; i++)
+        // Standard 'IsVisible' for these addons doesn't seem to work.
+        // 'VisibilityFlags' is the only thing that changes when toggling the addons.
+        // 'ActionCross' uses 'VisibilityFlags' 0 as visible and 1 as hidden.
+        // The 'ActionDoubleCross' bars seem to use the visibility flag from 'ActionCross'.
         {
-            var buttonGroup = addon->UldManager.NodeList[i];
-            if (buttonGroup == null || !buttonGroup->IsVisible()) continue;
-            for (int j = 0; j <= 3; j++)
+            AtkUnitBase* addon = (AtkUnitBase*)PictoService.GameGui.GetAddonByName("_ActionCross", 1);
+            if (addon == null || !addon->IsVisible || addon->VisibilityFlags != 0 || addon->UldManager.NodeListCount < 11) return;
+            for (int i = 8; i <= 11; i++)
             {
-                ClipAtkNode(addon, buttonGroup->GetAsAtkComponentNode()->Component->UldManager.NodeList[j], buttonGroup);
+                ClipCrossButtonGroup(addon, addon->UldManager.NodeList[i]);
             }
+        }
+
+        {
+            AtkUnitBase* addon = (AtkUnitBase*)PictoService.GameGui.GetAddonByName("_ActionDoubleCrossL", 1);
+            if (addon == null || !addon->IsVisible || addon->VisibilityFlags != 0 || addon->UldManager.NodeListCount < 7) return;
+            ClipCrossButtonGroup(addon, addon->UldManager.NodeList[5]);
+            ClipCrossButtonGroup(addon, addon->UldManager.NodeList[6]);
+        }
+
+        {
+            AtkUnitBase* addon = (AtkUnitBase*)PictoService.GameGui.GetAddonByName("_ActionDoubleCrossR", 1);
+            if (addon == null || !addon->IsVisible || addon->VisibilityFlags != 0 || addon->UldManager.NodeListCount < 7) return;
+            ClipCrossButtonGroup(addon, addon->UldManager.NodeList[5]);
+            ClipCrossButtonGroup(addon, addon->UldManager.NodeList[6]);
+        }
+    }
+
+    private unsafe void ClipCrossButtonGroup(AtkUnitBase* addon, AtkResNode* buttonGroup)
+    {
+        if (buttonGroup == null || !buttonGroup->IsVisible()) return;
+        for (int j = 0; j <= 3; j++)
+        {
+            ClipAtkNode(addon, buttonGroup->GetAsAtkComponentNode()->Component->UldManager.NodeList[j], buttonGroup);
         }
     }
 
