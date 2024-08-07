@@ -218,6 +218,6 @@ public class PctDrawList : IDisposable
 
     public void AddClipZone(Rectangle rectangle, float alpha = 0)
     {
-        _renderer.AddClipZone(rectangle, alpha);
+        _renderer.AddClipRect(rectangle, alpha);
     }
 }

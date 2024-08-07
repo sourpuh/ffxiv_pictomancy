@@ -3,7 +3,6 @@ using FFXIVClientStructs.FFXIV.Component.GUI;
 using System.Drawing;
 using System.Numerics;
 using System.Runtime.CompilerServices;
-using System.Text;
 
 namespace Pictomancy.DXDraw;
 
@@ -16,13 +15,30 @@ internal class AddonClipper
     private readonly static string[] _statusAddonNames = { "_StatusCustom0", "_StatusCustom1", "_StatusCustom2" };
     private readonly static List<string> _ignoredAddonNames = ["_FocusTargetInfo"];
     private DXRenderer? _renderer;
+    const int numCircleSegments = 16;
+    private Vector2[] circleOffsets;
+
+    public AddonClipper()
+    {
+        circleOffsets = new Vector2[numCircleSegments + 1];
+        float angleStep = MathF.PI * 2 / numCircleSegments;
+
+        for (int step = 0; step <= numCircleSegments; step++)
+        {
+            float angle = MathF.PI / 2 + step * angleStep;
+            circleOffsets[step] = new(MathF.Cos(angle), MathF.Sin(angle));
+        }
+    }
 
     public void Clip(DXRenderer renderer)
     {
         _renderer = renderer;
         ClipWindows();
+        ClipCastBar();
         ClipMainTargetInfo();
         ClipTargetInfoCastBar();
+        ClipTargetInfoStatus();
+        ClipFocusTarget();
         ClipActionBars();
         ClipActionCross();
         ClipPartyList();
@@ -30,17 +46,17 @@ internal class AddonClipper
         ClipEnemyList();
         ClipStatuses();
         ClipParameterWidget();
+        ClipLimitBreak();
+        ClipMinimap();
+        ClipMainCommand();
+        // ClipChat();
         _renderer = null;
     }
 
     private unsafe void ClipPartyList()
     {
         AtkUnitBase* addon = (AtkUnitBase*)PictoService.GameGui.GetAddonByName("_PartyList", 1);
-        if (addon == null || !addon->IsVisible) { return; }
-
-        if (addon->UldManager.NodeListCount < 2) { return; }
-
-        AtkResNode* baseNode = addon->UldManager.NodeList[0];
+        if (addon == null || !addon->IsVisible || addon->UldManager.NodeListCount < 23) return;
 
         for (int i = 6; i < 23; i++)
         {
@@ -58,7 +74,7 @@ internal class AddonClipper
                     slotNode->Height * addon->Scale - 5f * addon->Scale
                     );
 
-                _renderer!.AddClipZone(Rectangle(pos, size));
+                _renderer!.AddClipRect(Rectangle(pos, size));
             }
         }
     }
@@ -70,7 +86,7 @@ internal class AddonClipper
 
         for (int i = 4; i <= 11; i++)
         {
-            ClipAtkNode(addon, addon->UldManager.NodeList[i]);
+            ClipAtkNodeRectangle(addon, addon->UldManager.NodeList[i]);
         }
     }
 
@@ -95,7 +111,7 @@ internal class AddonClipper
                     continue;
                 }
 
-                string? name = Encoding.UTF8.GetString(addon->Name);
+                string name = addon->NameString;
                 if (name != null && _ignoredAddonNames.Contains(name))
                 {
                     continue;
@@ -117,28 +133,57 @@ internal class AddonClipper
                     size.Y += (30 * addon->Scale);
                 }
 
-                _renderer!.AddClipZone(Rectangle(pos, size));
+                _renderer!.AddClipRect(Rectangle(pos, size));
             }
             catch { }
         }
     }
-
+    private unsafe void ClipCastBar()
+    {
+        AtkUnitBase* addon = (AtkUnitBase*)PictoService.GameGui.GetAddonByName("_CastBar", 1);
+        if (addon == null || !addon->IsVisible || addon->VisibilityFlags != 0 || addon->UldManager.NodeListCount < 2) return;
+        ClipAtkNodeRectangle(addon, addon->UldManager.NodeList[3]);
+        ClipAtkNodeRectangle(addon, addon->UldManager.NodeList[8]);
+        ClipAtkNodeRectangle(addon, addon->UldManager.NodeList[9]);
+        ClipAtkNodeRectangle(addon, addon->UldManager.NodeList[10]);
+    }
     private unsafe void ClipMainTargetInfo()
     {
         AtkUnitBase* addon = (AtkUnitBase*)PictoService.GameGui.GetAddonByName("_TargetInfoMainTarget", 1);
         if (addon == null || !addon->IsVisible || addon->UldManager.NodeListCount < 5) return;
         var gaugeBar = addon->UldManager.NodeList[5];
         if (gaugeBar == null || !gaugeBar->IsVisible()) return;
-        ClipAtkNode(addon, gaugeBar->GetAsAtkComponentNode()->Component->UldManager.NodeList[0]);
+        ClipAtkNodeRectangle(addon, gaugeBar->GetAsAtkComponentNode()->Component->UldManager.NodeList[0]);
+        if (addon->UldManager.NodeList[9]->IsVisible())
+            ClipAtkNodeRectangle(addon, addon->UldManager.NodeList[10]);
     }
 
     private unsafe void ClipTargetInfoCastBar()
     {
         AtkUnitBase* addon = (AtkUnitBase*)PictoService.GameGui.GetAddonByName("_TargetInfoCastBar", 1);
-        if (addon == null || !addon->IsVisible || addon->UldManager.NodeListCount < 2) return;
-        ClipAtkNode(addon, addon->UldManager.NodeList[2]);
+        if (addon == null || !addon->IsVisible || addon->VisibilityFlags != 0 || addon->UldManager.NodeListCount < 2) return;
+        ClipAtkNodeRectangle(addon, addon->UldManager.NodeList[2]);
     }
 
+    private unsafe void ClipTargetInfoStatus()
+    {
+        AtkUnitBase* addon = (AtkUnitBase*)PictoService.GameGui.GetAddonByName("_TargetInfoBuffDebuff", 1);
+        if (addon == null || !addon->IsVisible || addon->UldManager.NodeListCount < 31) return;
+        for (int i = 2; i <= 31; i++)
+        {
+            var status = addon->UldManager.NodeList[i];
+            if (status == null || !status->IsVisible()) continue;
+            ClipAtkNodeRectangle(addon, status->GetAsAtkComponentNode()->Component->UldManager.NodeList[1]);
+            ClipAtkNodeRectangle(addon, status->GetAsAtkComponentNode()->Component->UldManager.NodeList[2]);
+        }
+    }
+    private unsafe void ClipFocusTarget()
+    {
+        AtkUnitBase* addon = (AtkUnitBase*)PictoService.GameGui.GetAddonByName("_FocusTargetInfo", 1);
+        if (addon == null || !addon->IsVisible || addon->UldManager.NodeListCount < 16) return;
+        ClipAtkNodeRectangle(addon, addon->UldManager.NodeList[2]);
+        ClipAtkNodeRectangle(addon, addon->UldManager.NodeList[16]);
+    }
     private unsafe void ClipActionBars()
     {
         foreach (string addonName in _actionBarAddonNames)
@@ -149,7 +194,7 @@ internal class AddonClipper
             {
                 var hotbarBtn = addon->UldManager.NodeList[i];
                 if (hotbarBtn == null || !hotbarBtn->IsVisible()) continue;
-                ClipAtkNode(addon, hotbarBtn->GetAsAtkComponentNode()->Component->UldManager.NodeList[0]);
+                ClipAtkNodeRectangle(addon, hotbarBtn->GetAsAtkComponentNode()->Component->UldManager.NodeList[0]);
             }
         }
     }
@@ -189,7 +234,7 @@ internal class AddonClipper
         if (buttonGroup == null || !buttonGroup->IsVisible()) return;
         for (int j = 0; j <= 3; j++)
         {
-            ClipAtkNode(addon, buttonGroup->GetAsAtkComponentNode()->Component->UldManager.NodeList[j], buttonGroup);
+            ClipAtkNodeRectangle(addon, buttonGroup->GetAsAtkComponentNode()->Component->UldManager.NodeList[j], buttonGroup);
         }
     }
 
@@ -204,8 +249,8 @@ internal class AddonClipper
             {
                 var status = addon->UldManager.NodeList[i];
                 if (status == null || !status->IsVisible()) continue;
-                ClipAtkNode(addon, status->GetAsAtkComponentNode()->Component->UldManager.NodeList[1]);
-                ClipAtkNode(addon, status->GetAsAtkComponentNode()->Component->UldManager.NodeList[2]);
+                ClipAtkNodeRectangle(addon, status->GetAsAtkComponentNode()->Component->UldManager.NodeList[1]);
+                ClipAtkNodeRectangle(addon, status->GetAsAtkComponentNode()->Component->UldManager.NodeList[2]);
             }
         }
     }
@@ -221,7 +266,7 @@ internal class AddonClipper
 
             AtkComponentNode* component = node->GetAsAtkComponentNode();
             if (component == null || component->Component->UldManager.NodeListCount < 1) continue;
-            ClipAtkNode(addon, component->Component->UldManager.NodeList[1]);
+            ClipAtkNodeRectangle(addon, component->Component->UldManager.NodeList[1]);
         }
     }
 
@@ -230,24 +275,67 @@ internal class AddonClipper
         AtkUnitBase* addon = (AtkUnitBase*)PictoService.GameGui.GetAddonByName("_ParameterWidget", 1);
         if (addon == null || !addon->IsVisible || addon->UldManager.NodeListCount < 2) return;
         // HP
-        ClipAtkNode(addon, addon->UldManager.NodeList[2]);
+        ClipAtkNodeRectangle(addon, addon->UldManager.NodeList[2]);
         // MP
-        ClipAtkNode(addon, addon->UldManager.NodeList[1]);
+        ClipAtkNodeRectangle(addon, addon->UldManager.NodeList[1]);
     }
-
+    private unsafe void ClipLimitBreak()
+    {
+        AtkUnitBase* addon = (AtkUnitBase*)PictoService.GameGui.GetAddonByName("_LimitBreak", 1);
+        if (addon == null || !addon->IsVisible || addon->UldManager.NodeListCount < 5) return;
+        ClipAtkNodeRectangle(addon, addon->UldManager.NodeList[2]);
+        ClipAtkNodeRectangle(addon, addon->UldManager.NodeList[3]);
+        ClipAtkNodeRectangle(addon, addon->UldManager.NodeList[4]);
+    }
+    private unsafe void ClipChat()
+    {
+        AtkUnitBase* addon = (AtkUnitBase*)PictoService.GameGui.GetAddonByName("ChatLog", 1);
+        if (addon == null || !addon->IsVisible || addon->UldManager.NodeListCount < 5) return;
+        ClipAtkNodeRectangle(addon, addon->UldManager.NodeList[3], null, 0.5f, true);
+    }
+    private unsafe void ClipMinimap()
+    {
+        AtkUnitBase* addon = (AtkUnitBase*)PictoService.GameGui.GetAddonByName("_NaviMap", 1);
+        if (addon == null || !addon->IsVisible || addon->UldManager.NodeListCount < 19) return;
+        ClipAtkNodeCircle(addon, addon->UldManager.NodeList[6]);
+        ClipAtkNodeCircle(addon, addon->UldManager.NodeList[8]);
+        ClipAtkNodeCircle(addon, addon->UldManager.NodeList[15]);
+    }
+    private unsafe void ClipMainCommand()
+    {
+        AtkUnitBase* addon = (AtkUnitBase*)PictoService.GameGui.GetAddonByName("_MainCommand", 1);
+        if (addon == null || !addon->IsVisible || addon->UldManager.NodeListCount < 8) return;
+        for (int i = 1; i <= 7; i++)
+        {
+            ClipAtkNodeCircle(addon, addon->UldManager.NodeList[i]);
+        }
+    }
     private static Rectangle Rectangle(Vector2 min, Vector2 size)
     {
         return new((int)min.X, (int)min.Y, (int)size.X, (int)size.Y);
     }
 
-    private unsafe void ClipAtkNode(AtkUnitBase* addon, AtkResNode* node, AtkResNode* parent = null)
+    private unsafe void ClipAtkNodeRectangle(AtkUnitBase* addon, AtkResNode* node, AtkResNode* parent = null, float alpha = 0, bool overrideVisibility = false)
     {
-        if (node == null || !node->IsVisible()) return;
+        if (node == null || !overrideVisibility && !node->IsVisible()) return;
         int posX = (int)node->ScreenX;
         int posY = (int)node->ScreenY;
 
         int width = (int)(node->Width * addon->Scale * node->ScaleX * (parent == null ? 1 : parent->ScaleX));
         int height = (int)(node->Height * addon->Scale * node->ScaleY * (parent == null ? 1 : parent->ScaleY));
-        _renderer!.AddClipZone(new(posX, posY, width, height));
+        _renderer!.AddClipRect(new(posX, posY, width, height), alpha);
+    }
+    private unsafe void ClipAtkNodeCircle(AtkUnitBase* addon, AtkResNode* node, AtkResNode* parent = null, float alpha = 0, bool overrideVisibility = false)
+    {
+        if (node == null || !overrideVisibility && !node->IsVisible()) return;
+        float xRadius = 0.5f * node->Width * addon->Scale * node->ScaleX * (parent == null ? 1 : parent->ScaleX);
+        float yRadius = 0.5f * node->Height * addon->Scale * node->ScaleY * (parent == null ? 1 : parent->ScaleY);
+        Vector2 radius = new(xRadius, yRadius);
+        Vector2 center = new Vector2(node->ScreenX, node->ScreenY) + radius;
+
+        for (int i = 0; i < numCircleSegments; i++)
+        {
+            _renderer!.AddClipTri(center, center + circleOffsets[i] * radius, center + circleOffsets[i + 1] * radius, alpha);
+        }
     }
 }

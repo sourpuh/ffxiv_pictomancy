@@ -10,7 +10,7 @@ internal class DXRenderer : IDisposable
     public const int MAX_FANS = 2048;
     public const int MAX_TRIS = 1024;
     public const int MAX_STROKE_SEGMENTS = MAX_FANS * Stroke.MAXIMUM_ARC_SEGMENTS / 2;
-    public const int MAX_CLIP_ZONES = 256 * 6;
+    public const int MAX_CLIP_ZONES = 512 * 6;
 
     public RenderContext RenderContext { get; init; } = new();
 
@@ -188,7 +188,7 @@ internal class DXRenderer : IDisposable
 
     private Stroke.Data.Builder GetStroke() => _strokeDynamicBuilder ??= _strokeDynamicData.Map(RenderContext);
 
-    public void AddClipZone(Rectangle rect, float alpha = 0)
+    public void AddClipRect(Rectangle rect, float alpha = 0)
     {
         Vector2 upperleft = new(rect.X, rect.Y);
         Vector2 width = new(rect.Width, 0);
@@ -201,6 +201,12 @@ internal class DXRenderer : IDisposable
         GetClipZones().Add(upperleft, alpha);
         GetClipZones().Add(upperleft + width + height, alpha);
         GetClipZones().Add(upperleft + height, alpha);
+    }
+    public void AddClipTri(Vector2 a, Vector2 b, Vector2 c, float alpha = 0)
+    {
+        GetClipZones().Add(a, alpha);
+        GetClipZones().Add(b, alpha);
+        GetClipZones().Add(c, alpha);
     }
     private ClipZone.Data.Builder GetClipZones() => _clipDynamicBuilder ??= _clipDynamicData.Map(RenderContext);
 
