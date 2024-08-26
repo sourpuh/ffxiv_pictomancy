@@ -1,5 +1,4 @@
 using FFXIVClientStructs.FFXIV.Client.Game.Control;
-using System.Drawing;
 using System.Numerics;
 using Device = FFXIVClientStructs.FFXIV.Client.Graphics.Kernel.Device;
 
@@ -188,11 +187,10 @@ internal class DXRenderer : IDisposable
 
     private Stroke.Data.Builder GetStroke() => _strokeDynamicBuilder ??= _strokeDynamicData.Map(RenderContext);
 
-    public void AddClipRect(Rectangle rect, float alpha = 0)
+    public void AddClipRect(Vector2 upperleft, Vector2 size, float alpha = 0)
     {
-        Vector2 upperleft = new(rect.X, rect.Y);
-        Vector2 width = new(rect.Width, 0);
-        Vector2 height = new(0, rect.Height);
+        Vector2 width = new(size.X, 0);
+        Vector2 height = new(0, size.Y);
 
         GetClipZones().Add(upperleft, alpha);
         GetClipZones().Add(upperleft + width, alpha);
