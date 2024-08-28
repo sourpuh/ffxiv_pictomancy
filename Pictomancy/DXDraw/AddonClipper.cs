@@ -45,7 +45,7 @@ internal class AddonClipper
         ClipActionBars();
         ClipActionCross();
         ClipPartyList();
-        ClipChatBubbles();
+        // ClipChatBubbles();
         ClipEnemyList();
         ClipStatuses();
         ClipParameterWidget();
