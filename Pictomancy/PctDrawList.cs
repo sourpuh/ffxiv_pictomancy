@@ -95,7 +95,7 @@ public class PctDrawList : IDisposable
     public void PathArcTo(Vector3 point, float radius, float startAngle, float stopAngle, uint numSegments = 0)
     {
         float totalAngle = stopAngle - startAngle;
-        if (numSegments == 0) numSegments = (uint)(MathF.Abs(totalAngle) * 180);
+        if (numSegments == 0) numSegments = (uint)(MathF.Abs(totalAngle) * 16);
 
         float angleStep = totalAngle / numSegments;
 
