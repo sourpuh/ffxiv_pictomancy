@@ -35,15 +35,24 @@ internal class DXRenderer : IDisposable
 
     private readonly ClipZone.Data _clipDynamicData;
     private ClipZone.Data.Builder? _clipDynamicBuilder;
+    public bool FanDegraded { get; private set; }
 
     public bool StrokeDegraded { get; private set; }
 
     public DXRenderer()
     {
-        TriFill = new(RenderContext);
-        _triFillDynamicData = new(RenderContext, MAX_TRIS, true);
-        FanFill = new(RenderContext);
-        _fanFillDynamicData = new(RenderContext, MAX_FANS, true);
+        try
+        {
+            // uncomment to test linux fanfill fallback renderer
+            // throw new Exception("test exception please ignore");
+            FanFill = new(RenderContext);
+        }
+        catch (Exception)
+        {
+            PictoService.Log.Error("[Pictomancy] Failed to compile fan shader; starting in degraded mode.");
+            FanDegraded = true;
+        }
+        _fanFillDynamicData = new(RenderContext, FanDegraded ? 1 : MAX_FANS, true);
         try
         {
             // uncomment to test linux imgui fallback renderer
@@ -55,7 +64,11 @@ internal class DXRenderer : IDisposable
             PictoService.Log.Error("[Pictomancy] Failed to compile stroke shader; starting in degraded mode.");
             StrokeDegraded = true;
         }
-        _strokeDynamicData = new(RenderContext, MAX_STROKE_SEGMENTS, true);
+        _strokeDynamicData = new(RenderContext, StrokeDegraded ? 1 : MAX_STROKE_SEGMENTS, true);
+
+        TriFill = new(RenderContext);
+        _triFillDynamicData = new(RenderContext, MAX_TRIS + (FanDegraded ? MAX_FANS * 360 : 0), true);
+
         ClipZone = new(RenderContext);
         _clipDynamicData = new(RenderContext, MAX_CLIP_ZONES, true);
         FSP = new(RenderContext);
@@ -73,7 +86,10 @@ internal class DXRenderer : IDisposable
         _strokeDynamicData?.Dispose();
         _clipDynamicBuilder?.Dispose();
         _clipDynamicData?.Dispose();
-        FanFill.Dispose();
+        if (!FanDegraded)
+        {
+            FanFill.Dispose();
+        }
         if (!StrokeDegraded)
         {
             Stroke.Dispose();
@@ -90,7 +106,10 @@ internal class DXRenderer : IDisposable
         ViewProj = *(SharpDX.Matrix*)&Control.Instance()->ViewProjectionMatrix;
 
         TriFill.UpdateConstants(RenderContext, new() { ViewProj = ViewProj });
-        FanFill.UpdateConstants(RenderContext, new() { ViewProj = ViewProj });
+        if (!FanDegraded)
+        {
+            FanFill.UpdateConstants(RenderContext, new() { ViewProj = ViewProj });
+        }
         if (!StrokeDegraded)
         {
             Stroke.UpdateConstants(RenderContext, new() { ViewProj = ViewProj, RenderTargetSize = new(ViewportSize.X, ViewportSize.Y) });
@@ -120,20 +139,17 @@ internal class DXRenderer : IDisposable
             _triFillDynamicBuilder = null;
             TriFill.Draw(RenderContext, _triFillDynamicData);
         }
-        if (_fanFillDynamicBuilder != null)
+        if (!FanDegraded && _fanFillDynamicBuilder != null)
         {
             _fanFillDynamicBuilder.Dispose();
             _fanFillDynamicBuilder = null;
             FanFill.Draw(RenderContext, _fanFillDynamicData);
         }
-        if (!StrokeDegraded)
+        if (!StrokeDegraded && _strokeDynamicBuilder != null)
         {
-            if (_strokeDynamicBuilder != null)
-            {
-                _strokeDynamicBuilder.Dispose();
-                _strokeDynamicBuilder = null;
-                Stroke.Draw(RenderContext, _strokeDynamicData);
-            }
+            _strokeDynamicBuilder.Dispose();
+            _strokeDynamicBuilder = null;
+            Stroke.Draw(RenderContext, _strokeDynamicData);
         }
         RenderTarget!.Clip(RenderContext);
         if (_clipDynamicBuilder != null)
@@ -164,16 +180,51 @@ internal class DXRenderer : IDisposable
     }
     private TriFill.Data.Builder GetTriFills() => _triFillDynamicBuilder ??= _triFillDynamicData.Map(RenderContext);
 
+    private void DrawTriangleFan(Vector3 center, float innerRadius, float outerRadius, float minAngle, float maxAngle, uint innerColor, uint outerColor)
+    {
+        float totalAngle = maxAngle - minAngle;
+        int numSegments = (int)(MathF.Abs(totalAngle) * 8);
+
+        float angleStep = totalAngle / numSegments;
+
+        Vector3 prev = new();
+        for (int step = 0; step <= numSegments; step++)
+        {
+            float angle = MathF.PI / 2 + minAngle + step * angleStep;
+            Vector3 offset = new(MathF.Cos(angle), 0, MathF.Sin(angle));
+
+            if (step > 0)
+            {
+                if (innerRadius > 0)
+                {
+                    DrawTriangle(center + innerRadius * prev, center + outerRadius * prev, center + outerRadius * offset, innerColor, outerColor, outerColor);
+                    DrawTriangle(center + outerRadius * offset, center + innerRadius * offset, center + innerRadius * prev, outerColor, innerColor, innerColor);
+                }
+                else
+                {
+                    DrawTriangle(center, center + outerRadius * prev, center + outerRadius * offset, innerColor, outerColor, outerColor);
+                }
+            }
+            prev = offset;
+        }
+    }
     public void DrawFan(Vector3 center, float innerRadius, float outerRadius, float minAngle, float maxAngle, uint innerColor, uint outerColor)
     {
-        GetFanFills().Add(
-            center,
-            innerRadius,
-            outerRadius,
-            minAngle,
-            maxAngle,
-            innerColor.ToVector4(),
-            outerColor.ToVector4());
+        if (!FanDegraded)
+        {
+            GetFanFills().Add(
+                center,
+                innerRadius,
+                outerRadius,
+                minAngle,
+                maxAngle,
+                innerColor.ToVector4(),
+                outerColor.ToVector4());
+        }
+        else
+        {
+            DrawTriangleFan(center, innerRadius, outerRadius, minAngle, maxAngle, innerColor, outerColor);
+        }
     }
     private FanFill.Data.Builder GetFanFills() => _fanFillDynamicBuilder ??= _fanFillDynamicData.Map(RenderContext);
 
