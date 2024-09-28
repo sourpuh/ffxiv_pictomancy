@@ -53,6 +53,7 @@ internal class AddonClipper
         ClipMinimap();
         ClipMainCommand();
         // ClipChat();
+        ClipNamePlates();
 
         ClipPld();
         ClipWar();
@@ -71,6 +72,7 @@ internal class AddonClipper
         ClipAst();
         ClipSge();
 
+        ClipBrd();
         ClipMch();
         ClipDnc();
 
@@ -336,6 +338,20 @@ internal class AddonClipper
         }
     }
 
+    private unsafe void ClipNamePlates()
+    {
+        var addon = GetVisibleAddonOrNull("NamePlate", 104);
+        if (addon == null) return;
+        for (int i = 55; i <= 104; i++)
+        {
+            AtkResNode* node = addon->UldManager.NodeList[i];
+            if (node == null || !node->IsVisible()) continue;
+
+            AtkComponentNode* component = node->GetAsAtkComponentNode();
+            if (component == null || component->Component->UldManager.NodeListCount < 1) continue;
+            ClipAtkNodeRectangle(component->Component->UldManager.NodeList[4]);
+        }
+    }
     private unsafe void ClipPld()
     {
         var addon = GetVisibleAddonOrNull("JobHudPLD0", 5);
@@ -547,6 +563,20 @@ internal class AddonClipper
             ClipAtkNodeDiamond(addon->UldManager.NodeList[10], scale: _diamondScale);
             ClipAtkNodeDiamond(addon->UldManager.NodeList[11], scale: _diamondScale);
         }
+    }
+    private unsafe void ClipBrd()
+    {
+        var addon = GetVisibleAddonOrNull("JobHudBRD0", 14);
+        if (addon == null) return;
+        ClipAtkNodeRectangle(addon->UldManager.NodeList[4]->GetAsAtkComponentNode()->Component->UldManager.NodeList[0], scale: _resourceBarScale);
+        ClipAtkNodeDiamond(addon->UldManager.NodeList[8], scale: _diamondScale);
+        ClipAtkNodeDiamond(addon->UldManager.NodeList[9], scale: _diamondScale);
+        ClipAtkNodeDiamond(addon->UldManager.NodeList[10], scale: _diamondScale);
+        ClipAtkNodeDiamond(addon->UldManager.NodeList[11], scale: _diamondScale);
+        ClipAtkNodeDiamond(addon->UldManager.NodeList[12], scale: _diamondScale);
+        ClipAtkNodeDiamond(addon->UldManager.NodeList[13], scale: _diamondScale);
+        ClipAtkNodeDiamond(addon->UldManager.NodeList[14], scale: _diamondScale);
+        ClipAtkNodeCircle(addon->UldManager.NodeList[5], scale: _gaugeTextScale);
     }
     private unsafe void ClipMch()
     {
