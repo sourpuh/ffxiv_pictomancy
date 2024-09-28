@@ -55,12 +55,11 @@ public class PctDrawList : IDisposable
     /// Add text to a position in world space using default font and size.
     /// Currently uses Imgui to draw thus is not clipped.
     /// </summary>
-    /// <param name="position">The position in world space</param>
-    /// <param name="color">The color to draw</param>
-    /// <param name="text">The text to draw</param>
+    /// <param name="position">Position in world space</param>
+    /// <param name="color">Text color</param>
+    /// <param name="text">Text to draw</param>
     public void AddText(Vector3 position, uint color, string text, float scale)
     {
-        throw new NotImplementedException("try again later");
         if (!PictoService.GameGui.WorldToScreen(position, out var position2D))
         {
             return;
@@ -73,13 +72,12 @@ public class PctDrawList : IDisposable
     /// Add dot to a position in world space.
     /// Currently uses Imgui to draw thus is not clipped.
     /// </summary>
-    /// <param name="position">The position in world space</param>
-    /// <param name="radiusPixels"></param>
-    /// <param name="color">The color to draw</param>
-    /// <param name="numSegments"></param>
+    /// <param name="position">Position in world space</param>
+    /// <param name="radiusPixels">Dot radius in pixels</param>
+    /// <param name="color">Dot color</param>
+    /// <param name="numSegments">Number of segments used to draw dot</param>
     public void AddDot(Vector3 position, float radiusPixels, uint color, uint numSegments = 0)
     {
-        throw new NotImplementedException("try again later");
         if (!PictoService.GameGui.WorldToScreen(position, out var position2D))
         {
             return;
