@@ -164,7 +164,7 @@ public class PctDrawList : IDisposable
 
     public void AddCircle(Vector3 origin, float radius, uint color, uint numSegments = 0, float thickness = 2)
     {
-        PathArcTo(origin, radius, 0, 2 * MathF.PI);
+        PathArcTo(origin, radius, 0, 2 * MathF.PI, numSegments);
         PathStroke(color, PctStrokeFlags.Closed, thickness);
     }
 
@@ -175,7 +175,7 @@ public class PctDrawList : IDisposable
 
     public void AddArc(Vector3 origin, float radius, float minAngle, float maxAngle, uint color, uint numSegments = 0, float thickness = 2)
     {
-        PathArcTo(origin, radius, minAngle, maxAngle);
+        PathArcTo(origin, radius, minAngle, maxAngle, numSegments);
         PathStroke(color, PctStrokeFlags.None, thickness);
     }
 
@@ -193,14 +193,14 @@ public class PctDrawList : IDisposable
     public void AddFan(Vector3 origin, float innerRadius, float outerRadius, float minAngle, float maxAngle, uint color, uint numSegments = 0, float thickness = 2)
     {
         bool isCircle = maxAngle - minAngle >= 2 * MathF.PI - 0.000001;
-        PathArcTo(origin, outerRadius, minAngle, maxAngle);
+        PathArcTo(origin, outerRadius, minAngle, maxAngle, numSegments);
         if (innerRadius > 0)
         {
             if (isCircle)
             {
                 PathStroke(color, PctStrokeFlags.Closed, thickness);
             }
-            PathArcTo(origin, innerRadius, maxAngle, minAngle);
+            PathArcTo(origin, innerRadius, maxAngle, minAngle, numSegments);
         }
         else if (!isCircle)
         {
@@ -211,7 +211,7 @@ public class PctDrawList : IDisposable
 
     public void AddFanFilled(Vector3 origin, float innerRadius, float outerRadius, float minAngle, float maxAngle, uint color, uint? outerColor = null, uint numSegments = 0)
     {
-        _renderer.DrawFan(origin, innerRadius, outerRadius, minAngle, maxAngle, color, outerColor ?? color);
+        _renderer.DrawFan(origin, innerRadius, outerRadius, minAngle, maxAngle, color, outerColor ?? color, numSegments);
     }
 
     public void AddClipZone(Rectangle rectangle, float alpha = 0)

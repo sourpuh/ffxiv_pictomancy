@@ -180,10 +180,10 @@ internal class DXRenderer : IDisposable
     }
     private TriFill.Data.Builder GetTriFills() => _triFillDynamicBuilder ??= _triFillDynamicData.Map(RenderContext);
 
-    private void DrawTriangleFan(Vector3 center, float innerRadius, float outerRadius, float minAngle, float maxAngle, uint innerColor, uint outerColor)
+    private void DrawTriangleFan(Vector3 center, float innerRadius, float outerRadius, float minAngle, float maxAngle, uint innerColor, uint outerColor, uint numSegments = 0)
     {
         float totalAngle = maxAngle - minAngle;
-        int numSegments = (int)(MathF.Abs(totalAngle) * 8);
+        if (numSegments == 0) numSegments = (uint)(MathF.Abs(totalAngle) * 8);
 
         float angleStep = totalAngle / numSegments;
 
@@ -208,9 +208,9 @@ internal class DXRenderer : IDisposable
             prev = offset;
         }
     }
-    public void DrawFan(Vector3 center, float innerRadius, float outerRadius, float minAngle, float maxAngle, uint innerColor, uint outerColor)
+    public void DrawFan(Vector3 center, float innerRadius, float outerRadius, float minAngle, float maxAngle, uint innerColor, uint outerColor, uint numSegments = 0)
     {
-        if (!FanDegraded)
+        if (!FanDegraded && numSegments == 0)
         {
             GetFanFills().Add(
                 center,
@@ -223,7 +223,7 @@ internal class DXRenderer : IDisposable
         }
         else
         {
-            DrawTriangleFan(center, innerRadius, outerRadius, minAngle, maxAngle, innerColor, outerColor);
+            DrawTriangleFan(center, innerRadius, outerRadius, minAngle, maxAngle, innerColor, outerColor, numSegments);
         }
     }
     private FanFill.Data.Builder GetFanFills() => _fanFillDynamicBuilder ??= _fanFillDynamicData.Map(RenderContext);
