@@ -51,13 +51,13 @@ public class PictoService
     /// Begin drawing. Returns nullptr if drawing in unavailable.
     /// </summary>
     /// <param name="imguidrawlist">Optional ImGui drawlist. If unspecified, the background drawlist is used.</param>
-    /// <param name="hints">Optional rendering hints.</param>
+    /// <param name="hints">Optional rendering hints. If unspecified, default hints are used.</param>
     /// <returns>Returns nullptr if drawing in unavailable.</returns>
-    public static PctDrawList? Draw(ImDrawListPtr? imguidrawlist = null, PctDrawHints hints = default)
+    public static PctDrawList? Draw(ImDrawListPtr? imguidrawlist = null, PctDrawHints? hints = null)
     {
-        Hints = hints;
-        if (hints.DrawInCutscene || IsInCutscene()) return null;
-        if (hints.DrawWhenFaded || IsFaded()) return null;
+        Hints = hints ?? new();
+        if (Hints.DrawInCutscene || IsInCutscene()) return null;
+        if (Hints.DrawWhenFaded || IsFaded()) return null;
 
         return DrawList = new PctDrawList(
             imguidrawlist ?? ImGui.GetBackgroundDrawList(),

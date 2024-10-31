@@ -12,7 +12,7 @@
 /// <param name="alphaBlendMode">Alpha blend mode. Check AlphaBlendMode file for mode descriptions.</param>
 /// <param name="clipNativeUI">Clip native UI if possible.</param>
 /// 
-public struct PctDrawHints(
+public record struct PctDrawHints(
     bool drawInCutscene = false,
     bool drawWhenFaded = false,
     bool autoDraw = true,
@@ -20,6 +20,9 @@ public struct PctDrawHints(
     AlphaBlendMode alphaBlendMode = AlphaBlendMode.Add,
     bool clipNativeUI = true)
 {
+    // Surely there's a better way to do this?
+    public PctDrawHints() : this(false, false, true, 255, AlphaBlendMode.Add, true) { }
+
     public bool DrawInCutscene => drawInCutscene;
     public bool DrawWhenFaded => drawWhenFaded;
     public bool AutoDraw => autoDraw;
