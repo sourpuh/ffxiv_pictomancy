@@ -136,7 +136,12 @@ internal class AddonClipper
             try
             {
                 AtkUnitBase* addon = *(AtkUnitBase**)Unsafe.AsPointer(ref loadedUnitsList->Entries[i]);
-                if (addon == null || !addon->IsVisible || addon->WindowNode == null || addon->Scale == 0)
+                if (addon == null
+                    || !addon->IsVisible
+                    || addon->WindowNode == null
+                    || addon->Scale == 0
+                    || addon->RootNode == null
+                    || !addon->RootNode->IsVisible())
                 {
                     continue;
                 }
