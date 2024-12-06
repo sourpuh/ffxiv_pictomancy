@@ -1,4 +1,5 @@
 using Dalamud.Interface.Utility;
+using FFXIVClientStructs.FFXIV.Common.Component.BGCollision;
 using ImGuiNET;
 using Pictomancy.DXDraw;
 using Pictomancy.ImGuiDraw;
@@ -118,6 +119,15 @@ public class PctDrawList : IDisposable
         _path.Clear();
     }
 
+    public void PathRayCastStroke(uint color, PctStrokeFlags flags, float thickness = 2f)
+    {
+        for (int i = 0; i < _path.Count; i++)
+        {
+            _path[i] = Raycast(_path[i], 10f);
+        }
+        PathStroke(color, flags, thickness);
+    }
+
     public void AddTriangleFilled(Vector3 a, Vector3 b, Vector3 c, uint color)
     {
         AddTriangleFilled(a, b, c, color);
@@ -214,6 +224,68 @@ public class PctDrawList : IDisposable
         _renderer.DrawFan(origin, innerRadius, outerRadius, minAngle, maxAngle, color, outerColor ?? color, numSegments);
     }
 
+    public void AddRaycastFanFilled(Vector3 origin, float innerRadius, float outerRadius, float minAngle, float maxAngle, uint color, uint? outerColor = null, uint numSegments = 0)
+    {
+        float castHeight = 10;
+        Vector3 castOffset = new(0, castHeight / 2, 0);
+
+        float totalAngle = maxAngle - minAngle;
+        if (numSegments <= 0) numSegments = (uint)Math.Max(1, (int)(MathF.Abs(totalAngle) * 8));
+        int numRings = 2; //Math.Max(1, (int)(fan.outerRadius - fan.innerRadius) * 8);
+
+        float angleStep = totalAngle / numSegments;
+        float ringStep = (outerRadius - innerRadius) / numRings;
+
+        Vector3[] segments = new Vector3[numSegments * (numRings + 10)];
+
+        for (int step = 0; step <= numSegments; step++)
+        {
+            float angle = MathF.PI / 2 + minAngle + step * angleStep;
+            Vector3 dir = new(MathF.Cos(angle), 0, MathF.Sin(angle));
+
+            for (int i = 0; i <= numRings; i++)
+            {
+                Vector3 offset = origin + dir * (innerRadius + ringStep * i);
+                /*
+                Vector3 castOrigin = offset + castOffset;
+                if (BGCollisionModule.RaycastMaterialFilter(castOrigin, -Vector3.UnitY, out RaycastHit hitInfo, castHeight))
+                {
+                    offset = hitInfo.Point;
+                }*/
+                offset = Raycast(offset, 10);
+                segments[step + (numSegments + 1) * i] = offset;
+            }
+        }
+
+        for (int i = 1; i <= numRings; i++)
+        {
+            var inColor = ColorLerp(color, outerColor ?? color, (float)(i - 1) / numRings);
+            var outColor = ColorLerp(color, outerColor ?? color, (float)(i) / numRings);
+
+            for (int step = 1; step <= numSegments; step++)
+            {
+                var prevIn = segments[(numSegments + 1) * (i - 1) + step - 1];
+                var currIn = segments[(numSegments + 1) * (i - 1) + step];
+                var prevOut = segments[(numSegments + 1) * i + step - 1];
+                var currOut = segments[(numSegments + 1) * i + step];
+
+                _renderer.DrawTriangle(prevIn, prevOut, currOut, inColor, outColor, outColor);
+                _renderer.DrawTriangle(currOut, currIn, prevIn, outColor, inColor, inColor);
+            }
+        }
+    }
+
+    private Vector3 Raycast(Vector3 origin, float castHeight)
+    {
+        Vector3 castOffset = new(0, castHeight / 2, 0);
+        Vector3 castOrigin = origin + castOffset;
+        if (BGCollisionModule.RaycastMaterialFilter(castOrigin, -Vector3.UnitY, out RaycastHit hitInfo, castHeight))
+        {
+            origin = hitInfo.Point;
+        }
+        return origin;
+    }
+
     public void AddClipZone(Rectangle rectangle, float alpha = 0)
     {
         _renderer.AddClipRect(new(rectangle.Left, rectangle.Top), new(rectangle.Width, rectangle.Height), alpha);
@@ -224,4 +296,11 @@ public class PctDrawList : IDisposable
         _renderer.AddClipTri(a, b, c, alpha);
     }
     */
+
+    // Linear interpolation between 1-byte components of uint32
+    public static uint ColorLerp(uint v1, uint v2, float amount)
+    {
+        if (v1 == v2) return v1;
+        return Vector4.Lerp(v1.ToVector4(), v2.ToVector4(), amount).ToUint();
+    }
 }
