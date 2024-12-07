@@ -119,13 +119,79 @@ public class PctDrawList : IDisposable
         _path.Clear();
     }
 
-    public void PathRayCastStroke(uint color, PctStrokeFlags flags, float thickness = 2f)
+    private void StrokeRange(int start, int stopExclusive, uint color, float thickness)
+    {
+        var subpath = _path.Skip(start).Take(stopExclusive - start);
+        if (_renderer.StrokeDegraded)
+        {
+            _fallbackRenderer.DrawStroke(subpath, thickness, color, false);
+        }
+        else
+        {
+            _renderer.DrawStroke(subpath, thickness, color, false);
+        }
+    }
+
+    private bool IsAdjacent(float a, float b, float jumpTolerance = 2f)
+    {
+        return MathF.Abs(a - b) < jumpTolerance;
+    }
+
+    private void StrokeAdjacent(/*float startY, */uint color, float thickness, bool closed)
+    {
+        // store adjacent start index
+        // when within startheight, flag bool
+        // when not adjacent to next, start -> draw if flag
+        float prevY = _path[0].Y;
+        bool draw = false;// IsAdjacent(prevY, startY);
+        int adjacentStart = draw ? 0 : int.MaxValue;
+
+        // Track if the segment starting at index 0 was drawn so we know to draw the final segment.
+        bool index0Draw = false;
+
+        for (int i = 1; i < _path.Count; i++)
+        {
+            float y = _path[i].Y;
+            if (!IsAdjacent(prevY, y))
+            {
+                if (draw)
+                {
+                    if (adjacentStart == 0) index0Draw = true;
+
+                    StrokeRange(adjacentStart, i, color, thickness);
+                    draw = false;
+                    // AddText(_path[i], 0xFFFFFFFF, $"i: {i}\ndraw: {draw}\nstart: {adjacentStart}\n{MathF.Abs(y - startY)} {IsAdjacent(y, startY)}", 2f);
+                }
+                adjacentStart = int.MaxValue;
+            }
+            else
+            {
+                adjacentStart = Math.Min(adjacentStart, i - 1);
+            }
+            // draw |= IsAdjacent(y, startY);
+            draw |= IsAdjacent(y, prevY);
+            prevY = y;
+        }
+
+        if (draw || closed && index0Draw)
+        {
+            StrokeRange(adjacentStart, _path.Count - 1, color, thickness);
+        }
+    }
+
+    public void PathRaycastStroke(uint color, PctStrokeFlags flags, float thickness = 2f)
     {
         for (int i = 0; i < _path.Count; i++)
         {
             _path[i] = Raycast(_path[i], 10f);
         }
-        PathStroke(color, flags, thickness);
+
+        bool closed = (flags & PctStrokeFlags.Closed) > 0;
+        if (closed)
+            _path.Add(_path[0]);
+
+        StrokeAdjacent(color, thickness, closed);
+        _path.Clear();
     }
 
     public void AddTriangleFilled(Vector3 a, Vector3 b, Vector3 c, uint color)
@@ -175,7 +241,7 @@ public class PctDrawList : IDisposable
     public void AddCircle(Vector3 origin, float radius, uint color, uint numSegments = 0, float thickness = 2)
     {
         PathArcTo(origin, radius, 0, 2 * MathF.PI, numSegments);
-        PathStroke(color, PctStrokeFlags.Closed, thickness);
+        PathRaycastStroke(color, PctStrokeFlags.Closed, thickness);
     }
 
     public void AddCircleFilled(Vector3 origin, float radius, uint color, uint? outerColor = null, uint numSegments = 0)
@@ -186,7 +252,7 @@ public class PctDrawList : IDisposable
     public void AddArc(Vector3 origin, float radius, float minAngle, float maxAngle, uint color, uint numSegments = 0, float thickness = 2)
     {
         PathArcTo(origin, radius, minAngle, maxAngle, numSegments);
-        PathStroke(color, PctStrokeFlags.None, thickness);
+        PathRaycastStroke(color, PctStrokeFlags.None, thickness);
     }
 
     public void AddArcFilled(Vector3 origin, float radius, float minAngle, float maxAngle, uint color, uint? outerColor = null, uint numSegments = 0)
@@ -208,7 +274,7 @@ public class PctDrawList : IDisposable
         {
             if (isCircle)
             {
-                PathStroke(color, PctStrokeFlags.Closed, thickness);
+                PathRaycastStroke(color, PctStrokeFlags.Closed, thickness);
             }
             PathArcTo(origin, innerRadius, maxAngle, minAngle, numSegments);
         }
@@ -216,7 +282,7 @@ public class PctDrawList : IDisposable
         {
             PathLineTo(origin);
         }
-        PathStroke(color, PctStrokeFlags.Closed, thickness);
+        PathRaycastStroke(color, PctStrokeFlags.Closed, thickness);
     }
 
     public void AddFanFilled(Vector3 origin, float innerRadius, float outerRadius, float minAngle, float maxAngle, uint color, uint? outerColor = null, uint numSegments = 0)
@@ -280,9 +346,9 @@ public class PctDrawList : IDisposable
         Vector3 castOffset = new(0, castHeight / 2, 0);
         Vector3 castOrigin = origin + castOffset;
         if (BGCollisionModule.RaycastMaterialFilter(castOrigin, -Vector3.UnitY, out RaycastHit hitInfo, castHeight))
-        {
             origin = hitInfo.Point;
-        }
+        else
+            origin = new(float.MaxValue, origin.Y, float.MaxValue);
         return origin;
     }
 
