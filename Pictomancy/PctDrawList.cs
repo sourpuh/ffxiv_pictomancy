@@ -120,7 +120,7 @@ public class PctDrawList : IDisposable
 
     public void AddTriangleFilled(Vector3 a, Vector3 b, Vector3 c, uint color)
     {
-        AddTriangleFilled(a, b, c, color);
+        AddTriangleFilled(a, b, c, color, color, color);
     }
 
     public void AddTriangleFilled(Vector3 a, Vector3 b, Vector3 c, uint colorA, uint colorB, uint colorC)
