@@ -1,4 +1,5 @@
 using FFXIVClientStructs.FFXIV.Client.Game.Control;
+using System.Drawing;
 using System.Numerics;
 using Device = FFXIVClientStructs.FFXIV.Client.Graphics.Kernel.Device;
 
@@ -165,6 +166,12 @@ internal class DXRenderer : IDisposable
         RenderContext.Execute();
         return FSPRenderTarget;
     }
+
+    public void RegisterTexture(Bitmap bitmap)
+    {
+        var texture = RenderContext.RegisterRenderTexture(bitmap, null);
+    }
+
     public void DrawText(Vector2 position, string text)
     {
         throw new NotImplementedException("try again later");

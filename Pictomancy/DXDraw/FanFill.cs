@@ -96,7 +96,9 @@ internal class FanFill : IDisposable
                 float4x4 viewProj;
             };
             Constants k : register(c0);
-
+            Texture2DArray textureSampler : register(t0);
+            SamplerState textureSamplerState : register(s0);
+            
             struct Fan
             {
                 float3 origin : WORLD;
@@ -112,7 +114,8 @@ internal class FanFill : IDisposable
             {
                 float4 projPos : SV_POSITION;
                 float4 color : COLOR;
-                float2 tex : TEXCOORD;
+                float2 texCoord : TEXCOORD;
+                int textureIndex : TEXCOORD1;
             };
 
             VSOutput vs(in Fan instance, uint vertexId: SV_VERTEXID, uint instanceId: SV_INSTANCEID)
@@ -124,11 +127,11 @@ internal class FanFill : IDisposable
                 float radius = 0;
                 if (vertexId % 2 == 0) {
                     o.color = instance.colorOrigin;
-                    o.tex.y = 0;
+                    o.texCoord.y = 0;
                     radius = instance.innerRadius;
                 } else {
                     o.color = instance.colorEnd;
-                    o.tex.y = instance.outerRadius - instance.innerRadius;
+                    o.texCoord.y = 1;//instance.outerRadius - instance.innerRadius;
                     radius = instance.outerRadius;
                 }
                 float totalAngle = instance.maxAngle - instance.minAngle;
@@ -136,14 +139,16 @@ internal class FanFill : IDisposable
                 float angle = PI / 2 + instance.minAngle + i * angleStep;
                 float3 offset = radius * float3(cos(angle), 0, sin(angle));
 
-                o.tex.x = angle;
+                o.texCoord.x = (angle - PI/2) / (PI*2);
                 o.projPos = mul(float4(instance.origin + offset, 1.0), k.viewProj);
+                o.textureIndex = 1;
                 return o;
             }
 
             float4 ps(VSOutput input) : SV_TARGET
             {
-                return input.color;
+                float4 texture = textureSampler.Sample(textureSamplerState, float3(input.texCoord, input.textureIndex));
+                return input.color * texture;
             }
             """;
 
@@ -189,6 +194,8 @@ internal class FanFill : IDisposable
         ctx.Context.VertexShader.Set(_vs);
         ctx.Context.VertexShader.SetConstantBuffer(0, _constantBuffer);
         ctx.Context.PixelShader.Set(_ps);
+        ctx.Context.PixelShader.SetShaderResources(0, ctx.Texture);
+        ctx.Context.PixelShader.SetSampler(0, ctx.SamplerState);
         ctx.Context.GeometryShader.Set(null);
     }
 
