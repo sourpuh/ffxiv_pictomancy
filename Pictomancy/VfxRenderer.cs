@@ -1,12 +1,11 @@
-﻿using Pictomancy.DXDraw;
-using Pictomancy.VfxDraw;
+﻿using Pictomancy.VfxDraw;
 using System.Numerics;
 
 namespace Pictomancy;
 public class VfxRenderer : IDisposable
 {
     const float DefaultHeight = 7;
-    const uint White = 0xFFFFFFFF;
+    readonly Vector4 White = Vector4.One;
     //const string OmenCircle = "general01bf"; // This is a nice white color that could be used for something
     const string OmenCircle = "general_1bf";
     const string OmenLine = "general02f";
@@ -172,34 +171,34 @@ public class VfxRenderer : IDisposable
         currActiveVfx.Add(key, vfx);
     }
 
-    public void AddLine(string id, Vector3 start, Vector3 stop, float halfWidth, uint color = White)
+    public void AddLine(string id, Vector3 start, Vector3 stop, float halfWidth, Vector4? color = null)
     {
         float rotation = MathF.Atan2(stop.X - start.X, stop.Z - start.Z);
         float length = Vector2.Distance(new Vector2(stop.X, stop.Z), new Vector2(start.X, start.Z));
         AddLine(id, start, length, halfWidth, rotation, color);
     }
 
-    public void AddLine(string id, Vector3 start, float length, float halfWidth, float rotation, uint color = White)
+    public void AddLine(string id, Vector3 start, float length, float halfWidth, float rotation, Vector4? color = null)
     {
-        CreateOrUpdateVfx(id, OmenLine, start, new(halfWidth, DefaultHeight, length), rotation, color.ToVector4());
+        CreateOrUpdateVfx(id, OmenLine, start, new(halfWidth, DefaultHeight, length), rotation, color ?? White);
     }
 
-    public void AddRectangle(string id, Vector3 origin, float halfWidth, float halfLength, float rotation = 0, uint color = White)
+    public void AddRectangle(string id, Vector3 origin, float halfWidth, float halfLength, float rotation = 0, Vector4? color = null)
     {
-        CreateOrUpdateVfx(id, OmenRectangle, origin, new(halfWidth, DefaultHeight, halfLength), rotation, color.ToVector4());
+        CreateOrUpdateVfx(id, OmenRectangle, origin, new(halfWidth, DefaultHeight, halfLength), rotation, color ?? White);
     }
 
-    public void AddCircle(string id, Vector3 origin, float radius, uint color = White)
+    public void AddCircle(string id, Vector3 origin, float radius, Vector4? color = null)
     {
-        CreateOrUpdateVfx(id, OmenCircle, origin, new(radius, DefaultHeight, radius), 0, color.ToVector4());
+        CreateOrUpdateVfx(id, OmenCircle, origin, new(radius, DefaultHeight, radius), 0, color ?? White);
     }
 
-    public bool AddCone(string id, Vector3 origin, float radius, float rotation, int angleWidth, uint color = White)
+    public bool AddCone(string id, Vector3 origin, float radius, float rotation, int angleWidth, Vector4? color = null)
     {
         var omen = GetOmenConeForAngle(angleWidth);
         if (omen != null)
         {
-            CreateOrUpdateVfx(id, omen, origin, new(radius, DefaultHeight, radius), rotation, color.ToVector4());
+            CreateOrUpdateVfx(id, omen, origin, new(radius, DefaultHeight, radius), rotation, color ?? White);
         }
         return omen != null;
     }
@@ -207,23 +206,23 @@ public class VfxRenderer : IDisposable
     /**
      * Add a donut with a specified inner radius. No outer radius.
      */
-    public void AddDonutHole(string id, Vector3 origin, float innerRadius, uint color = White)
+    public void AddDonutHole(string id, Vector3 origin, float innerRadius, Vector4? color = null)
     {
         var (omen, scale) = GetDonutHoleOmen(innerRadius);
-        CreateOrUpdateVfx(id, omen, origin, new(scale, DefaultHeight, scale), 0, color.ToVector4());
+        CreateOrUpdateVfx(id, omen, origin, new(scale, DefaultHeight, scale), 0, color ?? White);
     }
 
-    public bool AddDonut(string id, Vector3 origin, float innerRadius, float outerRadius, uint color = White)
+    public bool AddDonut(string id, Vector3 origin, float innerRadius, float outerRadius, Vector4? color = null)
     {
         var omen = GetDonutOmen(innerRadius, outerRadius);
         if (omen != null)
-            CreateOrUpdateVfx(id, omen, origin, new(outerRadius, DefaultHeight, outerRadius), 0, color.ToVector4());
+            CreateOrUpdateVfx(id, omen, origin, new(outerRadius, DefaultHeight, outerRadius), 0, color ?? White);
         return omen != null;
     }
 
-    public void AddCustomOmen(string id, string name, Vector3 origin, Vector3 size, float rotation, uint color = White)
+    public void AddCustomOmen(string id, string name, Vector3 origin, Vector3 size, float rotation, Vector4? color = null)
     {
-        CreateOrUpdateVfx(id, name, origin, size, rotation, color.ToVector4());
+        CreateOrUpdateVfx(id, name, origin, size, rotation, color ?? White);
     }
 
     internal void Update()

@@ -16,4 +16,18 @@ internal static class ColorExtensions
     {
         return ImGui.ColorConvertU32ToFloat4(color);
     }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static Vector4 AlphaDXToVFX(this uint color)
+    {
+        var colorVec = color.ToVector4();
+        if (colorVec.W <= 0.31372549019f)
+            colorVec.W *= 3.1875f;
+        else
+        {
+            var remainder = colorVec.W - 0.31372549019f;
+            colorVec.W = 1 + remainder * 1.96f;
+        }
+        return colorVec;
+    }
 }

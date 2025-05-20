@@ -163,7 +163,7 @@ public class PctDrawList : IDisposable
         Vector3 perpendicular = halfWidth * Vector3.Normalize(Vector3.Cross(direction, Vector3.UnitY));
         if (DrawWithVfx)
         {
-            PictoService._vfxRenderer.AddLine(currentDrawId!, start, stop, halfWidth, color);
+            PictoService._vfxRenderer.AddLine(currentDrawId!, start, stop, halfWidth, color.AlphaDXToVFX());
             return;
         }
         AddQuadFilled(start - perpendicular, stop - perpendicular, stop + perpendicular, start + perpendicular, color, outerColor ?? color, outerColor ?? color, color);
@@ -245,14 +245,14 @@ public class PctDrawList : IDisposable
             {
                 if (isCircle)
                 {
-                    PictoService._vfxRenderer.AddCircle(currentDrawId!, origin, outerRadius, color);
+                    PictoService._vfxRenderer.AddCircle(currentDrawId!, origin, outerRadius, color.AlphaDXToVFX());
                     return;
                 }
                 else
                 {
                     float angle = maxAngle - minAngle;
                     float rotation = minAngle + angle / 2;
-                    if (PictoService._vfxRenderer.AddCone(currentDrawId!, origin, outerRadius, -rotation, (int)MathF.Round(angle / (MathF.PI * 2) * 360, 0), color))
+                    if (PictoService._vfxRenderer.AddCone(currentDrawId!, origin, outerRadius, -rotation, (int)MathF.Round(angle / (MathF.PI * 2) * 360, 0), color.AlphaDXToVFX()))
                         return;
                 }
             }
@@ -262,10 +262,10 @@ public class PctDrawList : IDisposable
                 {
                     if (innerRadius > 1 && outerRadius > 50)
                     {
-                        PictoService._vfxRenderer.AddDonutHole(currentDrawId!, origin, innerRadius, color);
+                        PictoService._vfxRenderer.AddDonutHole(currentDrawId!, origin, innerRadius, color.AlphaDXToVFX());
                         return;
                     }
-                    else if (PictoService._vfxRenderer.AddDonut(currentDrawId!, origin, innerRadius, outerRadius, color))
+                    else if (PictoService._vfxRenderer.AddDonut(currentDrawId!, origin, innerRadius, outerRadius, color.AlphaDXToVFX()))
                         return;
                 }
             }
