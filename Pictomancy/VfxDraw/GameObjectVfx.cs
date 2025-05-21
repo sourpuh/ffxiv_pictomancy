@@ -27,6 +27,7 @@ public unsafe class GameObjectVfx : IDisposable
 
     public void Dispose()
     {
+        VfxFunctions.DestroyVfx(data);
         data = null;
     }
 
