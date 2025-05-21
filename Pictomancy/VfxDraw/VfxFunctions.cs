@@ -5,6 +5,9 @@ using System.Runtime.InteropServices;
 namespace Pictomancy.VfxDraw;
 internal static unsafe class VfxFunctions
 {
+    public delegate VfxData* CreateGameObjectVfxDelegate(byte* path, nint target, nint source, float a4, byte a5, ushort a6, byte a7);
+    public static CreateGameObjectVfxDelegate CreateGameObjectVfxInternal;
+
     public delegate VfxData* CreateVfxDelegate(byte* path, VfxInitData* init, byte a3, byte a4, float originX, float originY, float originZ, float sizeX, float sizeY, float sizeZ, float angle, float duration, int a13);
     public static CreateVfxDelegate CreateVfxInternal;
 
@@ -25,8 +28,9 @@ internal static unsafe class VfxFunctions
 
     internal static void Initialize()
     {
-        VfxInitDataCtor = Marshal.GetDelegateForFunctionPointer<VfxInitDataCtorDelegate>(PictoService.SigScanner.ScanText("E8 ?? ?? ?? ?? 8D 57 06 48 8D 4C 24 ??"));
+        CreateGameObjectVfxInternal = Marshal.GetDelegateForFunctionPointer<CreateGameObjectVfxDelegate>(PictoService.SigScanner.ScanText("E8 ?? ?? ?? ?? 48 8B D8 48 85 C0 74 27 B2 01"));
         CreateVfxInternal = Marshal.GetDelegateForFunctionPointer<CreateVfxDelegate>(PictoService.SigScanner.ScanText("E8 ?? ?? ?? ?? 48 8B D8 48 8D 95"));
+        VfxInitDataCtor = Marshal.GetDelegateForFunctionPointer<VfxInitDataCtorDelegate>(PictoService.SigScanner.ScanText("E8 ?? ?? ?? ?? 8D 57 06 48 8D 4C 24 ??"));
         DestroyVfx = Marshal.GetDelegateForFunctionPointer<DestroyVfxDataDelegate>(PictoService.SigScanner.ScanText("E8 ?? ?? ?? ?? 4D 89 A4 DE ?? ?? ?? ??"));
         UpdateVfxTransform = Marshal.GetDelegateForFunctionPointer<UpdateVfxTransformDelegate>(PictoService.SigScanner.ScanText("E8 ?? ?? ?? ?? EB 19 48 8B 0B"));
         UpdateVfxColor = Marshal.GetDelegateForFunctionPointer<UpdateVfxColorDelegate>(PictoService.SigScanner.ScanText("E8 ?? ?? ?? ?? 8B 4B F3"));

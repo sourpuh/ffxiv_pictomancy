@@ -29,7 +29,7 @@ public unsafe class Vfx : IDisposable
         data = null;
     }
 
-    private static VfxData* CreateVfxInternal(string path, Vector3 position, Vector3 size, float rotation, Vector4? color = null)
+    private static VfxData* CreateVfxInternal(string path, Vector3 position, Vector3 size, float rotation, Vector4 color)
     {
         var pathBytes = System.Text.Encoding.UTF8.GetBytes(path);
 
@@ -39,7 +39,7 @@ public unsafe class Vfx : IDisposable
         fixed (byte* pathPtr = pathBytes)
         {
             var vfx = VfxFunctions.CreateVfxInternal(pathPtr, &init, 2, 0, position.X, position.Y, position.Z, size.X, size.Y, size.Z, rotation, 1, -1);
-            vfx->Instance->Color = color ?? Vector4.One;
+            vfx->Instance->Color = color;
 
             return vfx;
         }
