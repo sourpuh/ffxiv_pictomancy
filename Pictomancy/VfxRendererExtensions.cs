@@ -1,4 +1,5 @@
 ﻿using Pictomancy.DXDraw;
+using System.Collections.Immutable;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 
@@ -11,120 +12,68 @@ public static class VfxRendererExtensions
     const string OmenLine = "general02f";
     const string OmenRectangle = "general_x02f";
 
-    const string OmenFan15 = "gl_fan015_0x";
-    const string OmenFan20 = "gl_fan020_0f";
-    const string OmenFan30 = "gl_fan030_1bf";
-    const string OmenFan45 = "gl_fan045_1bf";
-    const string OmenFan60 = "gl_fan060_1bf";
-    const string OmenFan80 = "gl_fan80_o0g";
-    const string OmenFan90 = "gl_fan090_1bf";
-    //const string OmenFan100 = "er_gl_fan100_o0v"; // Too dark
-    const string OmenFan120 = "gl_fan120_1bf";
-    const string OmenFan130 = "gl_fan130_0x";
-    const string OmenFan135 = "gl_fan135_c0g";
-    //const string OmenFan145 = "m0501_fan145_d1"; // Too dark and also scaled weird
-    const string OmenFan150 = "gl_fan150_1bf";
-    const string OmenFan180 = "gl_fan180_1bf";
-    const string OmenFan210 = "gl_fan210_1bf";
-    const string OmenFan225 = "gl_fan225_c0g";
-    const string OmenFan270 = "gl_fan270_0100af";
-
-    const string OmenDonut0_7 = "gl_sircle_5003bf";
-    const string OmenDonut0_9 = "gl_sircle_7006x";
-    const string OmenDonut1_11 = "gl_sircle_1034bf";
-    const string OmenDonut1_5 = "gl_circle_5007_x1";
-    const string OmenDonut1_66 = "gl_sircle_6010bf";
-    const string OmenDonut1_8 = "gl_sircle_1703x";
-    const string OmenDonut2 = "gl_sircle_2004bv";
-    const string OmenDonut2_15 = "gl_sircle_7015k1";
-    const string OmenDonut2_33 = "gl_sircle_3007bx";
-    const string OmenDonut2_5 = "gl_sircle_2005bf";
-    const string OmenDonut2_62 = "gl_sircle_1905bf";
-    const string OmenDonut2_66 = "gl_sircle_3008bf";
-    const string OmenDonut2_8 = "gl_sircle_1805r1";
-    const string OmenDonut3 = "gl_sircle_4012c";
-    const string OmenDonut3_11 = "x6r8_b4_donut13m_4_01k1";
-    const string OmenDonut3_2 = "gl_sircle_2508_o0t1";
-    const string OmenDonut3_33 = "x6r8_b4_donut13m_4_01k1";
-    const string OmenDonut3_7 = "gl_sircle_1907y0x";
-    const string OmenDonut4 = "gl_sircle_2008bi";
-    const string OmenDonut4_66 = "gl_sircle_3014bf";
-    const string OmenDonut5 = "gl_sircle_2010bf";
-    const string OmenDonut5_5 = "gl_sircle_2011v";
-    const string OmenDonut6 = "gl_sircle_5030c"; // makes noise; replace if another 6 is found
-    const string OmenDonut6_33 = "gl_sircle_1610_o0v";
-    const string OmenDonut6_66 = "gl_sircle_1510bx";
-    const string OmenDonut7_1 = "gl_sircle_1710_o0p";
-    const string OmenDonut7_33 = "gl_sircle_2316_o0p";
-    const string OmenDonut7_5 = "gl_sircle_2015bx";
-    const string OmenDonut8_2 = "gl_sircle_1109w";
-    const string OmenDonut8_9 = "gl_sircle_1715w";
-    const string OmenDonut9 = "gl_sircle_2018w";
-
-    static readonly List<(string, float)> OmenDonutHoleSize = [
-        (OmenDonut0_7, 0.07f),
-        (OmenDonut0_9, 0.09f),
-        (OmenDonut1_11, 0.111f),
-        (OmenDonut1_5, 0.15f),
-        (OmenDonut1_66, 0.166f),
-        (OmenDonut1_8, 0.18f),
-        (OmenDonut2, 0.2f),
-        (OmenDonut2_15, 0.215f),
-        (OmenDonut2_33, 0.233f),
-        (OmenDonut2_5, 0.25f),
-        (OmenDonut2_62, 0.262f),
-        (OmenDonut2_66, 0.266f),
-        (OmenDonut2_8, 0.28f),
-        (OmenDonut3, 0.3f),
-        (OmenDonut3_11, 0.311f),
-        (OmenDonut3_2, 0.32f),
-        (OmenDonut3_33, 0.333f),
-        (OmenDonut3_7, 0.37f),
-        (OmenDonut4, 0.4f),
-        (OmenDonut4_66, 0.466f),
-        (OmenDonut5, 0.5f),
-        (OmenDonut5_5, 0.55f),
-        (OmenDonut6, 0.6f),
-        (OmenDonut6_33, 0.633f),
-        (OmenDonut6_66, 0.666f),
-        (OmenDonut7_1, 0.71f),
-        (OmenDonut7_33, 0.733f),
-        (OmenDonut7_5, 0.75f),
-        (OmenDonut8_2, 0.82f),
-        (OmenDonut8_9, 0.89f),
-        (OmenDonut9, 0.9f),
-     ];
-
-    private static string? GetOmenConeForAngle(int angleWidth)
+    public static string? GetOmenConeForAngle(int angle)
     {
-        return angleWidth switch
+        return angle switch
         {
-            15 => OmenFan15,
-            20 => OmenFan20,
-            30 => OmenFan30,
-            45 => OmenFan45,
-            60 => OmenFan60,
-            80 => OmenFan80,
-            90 => OmenFan90,
-            // 100 => OmenFan100,
-            120 => OmenFan120,
-            130 => OmenFan130,
-            135 => OmenFan135,
-            // 145 => OmenFan145,
-            150 => OmenFan150,
-            180 => OmenFan180,
-            210 => OmenFan210,
-            225 => OmenFan225,
-            270 => OmenFan270,
+            15 => "gl_fan015_0x",
+            20 => "gl_fan020_0f",
+            30 => "gl_fan030_1bf",
+            45 => "gl_fan045_1bf",
+            60 => "gl_fan060_1bf",
+            80 => "gl_fan80_o0g",
+            90 => "gl_fan090_1bf",
+            120 => "gl_fan120_1bf",
+            130 => "gl_fan130_0x",
+            135 => "gl_fan135_c0g",
+            150 => "gl_fan150_1bf",
+            180 => "gl_fan180_1bf",
+            210 => "gl_fan210_1bf",
+            225 => "gl_fan225_c0g",
+            270 => "gl_fan270_0100af",
             360 => OmenCircle,
             _ => null,
         };
     }
 
-    private static string? GetDonutOmen(float innerRadius, float outerRadius)
+    public static readonly ImmutableList<(string, float)> OmenDonutHoleSizes = [
+        ("gl_sircle_5003bf", 0.07f),
+        ("gl_sircle_7006x", 0.09f),
+        ("gl_sircle_1034bf", 0.111f),
+        ("gl_circle_5007_x1", 0.15f),
+        ("gl_sircle_6010bf", 0.166f),
+        ("gl_sircle_1703x", 0.18f),
+        ("gl_sircle_2004bv", 0.2f),
+        ("gl_sircle_7015k1", 0.215f),
+        ("gl_sircle_3007bx", 0.233f),
+        ("gl_sircle_2005bf", 0.25f),
+        ("gl_sircle_1905bf", 0.262f),
+        ("gl_sircle_3008bf", 0.266f),
+        ("gl_sircle_1805r1", 0.28f),
+        ("gl_sircle_4012c", 0.3f),
+        ("x6r8_b4_donut13m_4_01k1", 0.311f),
+        ("gl_sircle_2508_o0t1", 0.32f),
+        ("x6r8_b4_donut13m_4_01k1", 0.333f),
+        ("gl_sircle_1907y0x", 0.37f),
+        ("gl_sircle_2008bi", 0.4f),
+        ("gl_sircle_3014bf", 0.466f),
+        ("gl_sircle_2010bf", 0.5f),
+        ("gl_sircle_2011v", 0.55f),
+        ("gl_sircle_5030c", 0.6f), // makes noise; replace if another 6 is found
+        ("gl_sircle_1610_o0v", 0.633f),
+        ("gl_sircle_1510bx", 0.666f),
+        ("gl_sircle_1710_o0p", 0.71f),
+        ("gl_sircle_2316_o0p", 0.733f),
+        ("gl_sircle_2015bx", 0.75f),
+        ("gl_sircle_1109w", 0.82f),
+        ("gl_sircle_1715w", 0.89f),
+        ("gl_sircle_2018w", 0.9f),
+     ];
+
+    public static string? GetDonutOmenForRadius(float innerRadius, float outerRadius)
     {
         var desiredRatio = innerRadius / outerRadius;
-        var x = OmenDonutHoleSize.Where(x =>
+        var x = OmenDonutHoleSizes.Where(x =>
         {
             var comparison = desiredRatio - x.Item2;
 
@@ -133,9 +82,9 @@ public static class VfxRendererExtensions
         return x.Item1;
     }
 
-    private static (string, float) GetDonutHoleOmen(float innerRadius)
+    public static (string, float) GetDonutHoleOmenForRadius(float innerRadius)
     {
-        var (omen, actualInnerRadius) = OmenDonutHoleSize[0];
+        var (omen, actualInnerRadius) = OmenDonutHoleSizes[0];
         return (omen, innerRadius / actualInnerRadius);
     }
 
@@ -172,13 +121,13 @@ public static class VfxRendererExtensions
     // Add a donut with a specified inner radius. No outer radius.
     public static void AddDonutHole(this VfxRenderer r, string id, Vector3 origin, float innerRadius, Vector4? color = null)
     {
-        var (omen, scale) = GetDonutHoleOmen(innerRadius);
+        var (omen, scale) = GetDonutHoleOmenForRadius(innerRadius);
         r.AddOmen(id, omen, origin, new(scale, DefaultHeight, scale), 0, color);
     }
 
     public static bool AddDonut(this VfxRenderer r, string id, Vector3 origin, float innerRadius, float outerRadius, Vector4? color = null)
     {
-        var omen = GetDonutOmen(innerRadius, outerRadius);
+        var omen = GetDonutOmenForRadius(innerRadius, outerRadius);
         if (omen != null)
             r.AddOmen(id, omen, origin, new(outerRadius, DefaultHeight, outerRadius), 0, color);
         return omen != null;
