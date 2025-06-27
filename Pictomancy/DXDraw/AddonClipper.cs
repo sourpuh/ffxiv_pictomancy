@@ -1,7 +1,9 @@
+using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using System.Numerics;
 using System.Runtime.CompilerServices;
+using static Dalamud.Interface.Utility.Raii.ImRaii;
 
 namespace Pictomancy.DXDraw;
 
@@ -345,16 +347,25 @@ internal class AddonClipper
 
     private unsafe void ClipNamePlates()
     {
-        var addon = GetVisibleAddonOrNull("NamePlate", 104);
-        if (addon == null) return;
-        for (int i = 55; i <= 104; i++)
+        var addon = (AtkUnitBase*)PictoService.GameGui.GetAddonByName("NamePlate");
+        if(addon->IsVisible && addon->UldManager.LoadedState == AtkLoadState.Loaded && addon->IsFullyLoaded())
         {
-            AtkResNode* node = addon->UldManager.NodeList[i];
-            if (node == null || !node->IsVisible()) continue;
-
-            AtkComponentNode* component = node->GetAsAtkComponentNode();
-            if (component == null || component->Component->UldManager.NodeListCount < 1) continue;
-            ClipAtkNodeRectangle(component->Component->UldManager.NodeList[4]);
+            {
+                var node = addon->GetComponentNodeById(2);
+                if(node != null && node->IsVisible())
+                {
+                    ClipAtkNodeRectangle(node->Component->UldManager.SearchNodeById(11));
+                }
+            }
+            for(var i = 1u; i < 50; i++)
+            {
+                var id = 20000u + i;
+                var node = addon->GetComponentNodeById(id);
+                if(node != null && node->IsVisible())
+                {
+                    ClipAtkNodeRectangle(node->Component->UldManager.SearchNodeById(11));
+                }
+            }
         }
     }
     private unsafe void ClipPld()
