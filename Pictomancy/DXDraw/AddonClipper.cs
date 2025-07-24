@@ -345,15 +345,15 @@ internal class AddonClipper
 
     private unsafe void ClipNamePlates()
     {
-        var addon = GetVisibleAddonOrNull("NamePlate", 104);
+        var addon = GetVisibleAddonOrNull("NamePlate", 50);
         if (addon == null) return;
-        for (int i = 55; i <= 104; i++)
+        for (int i = 1; i <= 50; i++)
         {
             AtkResNode* node = addon->UldManager.NodeList[i];
             if (node == null || !node->IsVisible()) continue;
 
             AtkComponentNode* component = node->GetAsAtkComponentNode();
-            if (component == null || component->Component->UldManager.NodeListCount < 1) continue;
+            if (component == null || component->Component->UldManager.NodeListCount < 5) continue;
             ClipAtkNodeRectangle(component->Component->UldManager.NodeList[4]);
         }
     }
