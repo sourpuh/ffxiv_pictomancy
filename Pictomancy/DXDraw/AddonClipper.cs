@@ -36,7 +36,6 @@ internal class AddonClipper
     public void Clip(DXRenderer renderer)
     {
         _renderer = renderer;
-        ClipWindows();
         ClipCastBar();
         ClipMainTargetInfo();
         ClipTargetInfoCastBar();
@@ -80,6 +79,8 @@ internal class AddonClipper
         ClipSmn();
         ClipRdm();
         ClipPct();
+
+        ClipWindows();
         _renderer = null;
     }
 
@@ -131,6 +132,7 @@ internal class AddonClipper
         AtkUnitList* loadedUnitsList = &manager->AtkUnitManager.AllLoadedUnitsList;
         if (loadedUnitsList == null) { return; }
 
+        string name = "";
         for (int i = 0; i < loadedUnitsList->Count; i++)
         {
             try
@@ -146,7 +148,7 @@ internal class AddonClipper
                     continue;
                 }
 
-                string name = addon->NameString;
+                name = addon->NameString;
                 if (name != null && _ignoredAddonNames.Contains(name))
                 {
                     continue;
@@ -170,7 +172,10 @@ internal class AddonClipper
 
                 _renderer!.AddClipRect(pos, size);
             }
-            catch { }
+            catch (Exception e)
+            {
+                throw new InvalidOperationException($"Pictomancy exception during {name} window clip; loadedUnitsList count: {loadedUnitsList->Count}", e);
+            }
         }
     }
     private unsafe void ClipCastBar()
