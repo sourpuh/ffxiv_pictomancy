@@ -5,6 +5,7 @@
     <Description>A library for drawing 3D overlays in Dalamud plugins</Description>
     <PackageProjectUrl>https://github.com/sourpuh/ffxiv_pictomancy</PackageProjectUrl>
     <Platforms>x64</Platforms>
+    <PackageLicenseExpression>AGPL-3.0-or-later</PackageLicenseExpression>
   </PropertyGroup>
 
   <PropertyGroup>
@@ -18,11 +19,23 @@
 
   <PropertyGroup>
     <DalamudLibPath>$(appdata)\XIVLauncher\addon\Hooks\dev\</DalamudLibPath>
+    <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+    <Title>Pictomancy</Title>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <RepositoryUrl>https://github.com/sourpuh/ffxiv_pictomancy.git</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform($([System.Runtime.InteropServices.OSPlatform]::Linux)))'">
     <DalamudLibPath>$(DALAMUD_HOME)/</DalamudLibPath>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\README.md">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
+    </None>
+  </ItemGroup>
 
   <ItemGroup>
     <Reference Include="Dalamud">

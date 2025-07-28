@@ -6,7 +6,10 @@ Pictomancy simplifies the hard parts of 3D overlays by correctly clipping object
 # Pictomancy is still in development and does not have a stable API. Use at your own risk.
 
 ## Installation
-Use as a git sub-module.
+Nuget package: https://www.nuget.org/packages/Pictomancy
+
+
+Use as a git sub-module:
 ```bash
 git submodule add https://github.com/sourpuh/ffxiv_pictomancy
 ```
