@@ -1,5 +1,4 @@
 using Dalamud.Interface.Utility;
-using ImGuiNET;
 using Pictomancy.DXDraw;
 using Pictomancy.ImGuiDraw;
 using System.Drawing;

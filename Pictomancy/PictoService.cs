@@ -1,10 +1,10 @@
-﻿using Dalamud.Game;
+﻿global using Dalamud.Bindings.ImGui;
+using Dalamud.Game;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.IoC;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Component.GUI;
-using ImGuiNET;
 using Pictomancy.DXDraw;
 using Pictomancy.VfxDraw;
 
