@@ -115,8 +115,8 @@ public class PictoService
 
     private unsafe static bool IsFaded()
     {
-        var fadeMiddleWidget = (AtkUnitBase*)GameGui.GetAddonByName("FadeMiddle");
-        var fadeBlackWidget = (AtkUnitBase*)GameGui.GetAddonByName("FadeBlack");
+        var fadeMiddleWidget = (AtkUnitBase*)GameGui.GetAddonByName("FadeMiddle").Address;
+        var fadeBlackWidget = (AtkUnitBase*)GameGui.GetAddonByName("FadeBlack").Address;
         return fadeMiddleWidget != null && fadeMiddleWidget->IsVisible ||
             fadeBlackWidget != null && fadeBlackWidget->IsVisible;
     }
