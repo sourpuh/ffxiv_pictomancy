@@ -29,7 +29,7 @@ public static unsafe class VfxFunctions
     public delegate long UpdateVfxColorDelegate(VfxResourceInstance* vfxInstance, float r, float g, float b, float a);
     public static UpdateVfxColorDelegate UpdateVfxColor;
 
-    public const string RotateMatrixSig = "E8 ?? ?? ?? ?? 48 8D 77 20";
+    public const string RotateMatrixSig = "E8 ?? ?? ?? ?? 4C 8D 76 20";
     public delegate void RotateMatrixDelegate(Matrix4x4* matrix, float rotation);
     public static RotateMatrixDelegate RotateMatrix;
 
