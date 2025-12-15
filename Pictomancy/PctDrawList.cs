@@ -57,14 +57,17 @@ public class PctDrawList : IDisposable
     /// <param name="position">Position in world space</param>
     /// <param name="color">Text color</param>
     /// <param name="text">Text to draw</param>
-    public void AddText(Vector3 position, uint color, string text, float scale)
+    /// <param name="scale">Scale to draw; looks bad when using high numbers; let me know if you actually want that fixed.</param>
+    public void AddText(Vector3 position, uint color, string text, float scale = 1)
     {
         if (!PictoService.GameGui.WorldToScreen(position, out var position2D))
         {
             return;
         }
+        ImGui.SetWindowFontScale(scale);
         var textPosition = position2D - (ImGui.CalcTextSize(text) / 2f);
         _drawList.AddText(textPosition, color, text);
+        ImGui.SetWindowFontScale(1f);
     }
 
     /// <summary>
