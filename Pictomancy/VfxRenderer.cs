@@ -7,24 +7,24 @@ public class VfxRenderer : IDisposable
 {
     static readonly Vector4 White = Vector4.One;
 
-    private static string OmenPath(string x)
+    public static string OmenPath(string name)
     {
-        return $"vfx/omen/eff/{x}.avfx";
+        return $"vfx/omen/eff/{name}.avfx";
     }
 
-    private static string LockonPath(string x)
+    public static string LockonPath(string name)
     {
-        return $"vfx/lockon/eff/{x}.avfx";
+        return $"vfx/lockon/eff/{name}.avfx";
     }
 
-    private static string ChannelingPath(string x)
+    public static string ChannelingPath(string name)
     {
-        return $"vfx/channeling/eff/{x}.avfx";
+        return $"vfx/channeling/eff/{name}.avfx";
     }
 
-    private static string CommonPath(string x)
+    public static string CommonPath(string name)
     {
-        return $"vfx/common/eff/{x}.avfx";
+        return $"vfx/common/eff/{name}.avfx";
     }
 
     InterframeResourceTracker<Vfx> trackedVfx;
@@ -96,6 +96,22 @@ public class VfxRenderer : IDisposable
     public void AddCommon(string id, string name, IGameObject target, Vector3? scale = null, Vector4? color = null)
     {
         CreateOrUpdateVfx(id, CommonPath(name), target, target, scale ?? Vector3.One, color ?? White);
+    }
+
+    /// <summary>
+    /// Add a custom path VFX at a position with scale, rotation, and color.
+    /// If the ID is specified in consecutive frames, the VFX is updated to match the new parameters.
+    /// If the ID is not specified in consecutive frames, the VFX is destroyed.
+    /// </summary>
+    /// <param name="id">Unique ID used to track the VFX across frames</param>
+    /// <param name="path">Full path of the VFX (such as "vfx/common/eff/fld_mark_a0f.avfx")</param>
+    /// <param name="origin">World position of the origin of the VFX</param>
+    /// <param name="scale">Scale; this may not be supported by all VFX</param>
+    /// <param name="rotation">Rotation; this may not be supported by all VFX</param>
+    /// <param name="color">Color of the VFX; values beyond 1 are supported; this may not be supported by all VFX</param>
+    public void AddCustom(string id, string path, Vector3 origin, Vector3? scale = null, float rotation = 0, Vector4? color = null)
+    {
+        CreateOrUpdateVfx(id, path, origin, scale ?? Vector3.One, rotation, color ?? White);
     }
 
     private void CreateOrUpdateVfx(string id, string path, Vector3 position, Vector3 scale, float rotation, Vector4 color)
