@@ -1,4 +1,4 @@
-﻿<Project Sdk="Dalamud.NET.Sdk/13.0.0">
+﻿<Project Sdk="Dalamud.NET.Sdk/14.0.0">
   <PropertyGroup>
     <Authors>sourpuh</Authors>
     <Version>0.0.1</Version>
@@ -37,5 +37,6 @@
     <PackageReference Include="SharpDX.D3DCompiler" Version="4.2.0" />
     <PackageReference Include="SharpDX.Direct3D11" Version="4.2.0" />
     <PackageReference Include="SharpDX.Direct2D1" Version="4.2.0" />
+    <PackageReference Update="DotNet.ReproducibleBuilds" Version="1.2.39" />
   </ItemGroup>
 </Project>
