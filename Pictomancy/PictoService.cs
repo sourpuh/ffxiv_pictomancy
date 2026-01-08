@@ -1,5 +1,4 @@
 ﻿global using Dalamud.Bindings.ImGui;
-using Dalamud.Game;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.IoC;
 using Dalamud.Plugin;
@@ -102,7 +101,7 @@ public class PictoService
         if (Hints.DrawWhenFaded || IsFaded()) return null;
 
         return DrawList = new PctDrawList(
-            imguidrawlist ?? ImGui.GetBackgroundDrawList(),
+            imguidrawlist,
             _dxRenderer,
             _addonClipper
         );

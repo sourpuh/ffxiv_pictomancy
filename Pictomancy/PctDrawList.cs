@@ -12,18 +12,32 @@ public class PctDrawList : IDisposable
     internal readonly DXRenderer _renderer;
     internal readonly ImGuiRenderer _fallbackRenderer;
     internal readonly AddonClipper _addonClipper;
+    internal readonly bool isMyWindow;
     private PctTexture? _texture;
     internal bool Finalized => _texture != null;
 
-    internal PctDrawList(ImDrawListPtr drawlist, DXRenderer renderer, AddonClipper addonClipper)
+    internal PctDrawList(ImDrawListPtr? drawlist, DXRenderer renderer, AddonClipper addonClipper)
     {
-        _drawList = drawlist;
+        if (drawlist == null)
+        {
+            ImGuiHelpers.ForceNextWindowMainViewport();
+            ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, Vector2.Zero);
+            ImGuiHelpers.SetNextWindowPosRelativeMainViewport(Vector2.Zero);
+            ImGui.SetNextWindowSize(ImGuiHelpers.MainViewport.Size);
+            if (ImGui.Begin("PctWindow#" + PictoService.PluginInterface.InternalName, ImGuiWindowFlags.NoInputs | ImGuiWindowFlags.NoNav | ImGuiWindowFlags.NoTitleBar | ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoBackground | ImGuiWindowFlags.AlwaysUseWindowPadding | ImGuiWindowFlags.NoSavedSettings | ImGuiWindowFlags.NoFocusOnAppearing))
+            {
+                drawlist = ImGui.GetWindowDrawList();
+                isMyWindow = true;
+            }
+            ImGui.PopStyleVar();
+        }
+        _drawList = drawlist ?? ImGui.GetBackgroundDrawList();
         _path = new();
         _renderer = renderer;
         _addonClipper = addonClipper;
         _texture = null;
         _renderer.BeginFrame();
-        _fallbackRenderer = new(drawlist);
+        _fallbackRenderer = new(_drawList);
     }
 
     public PctTexture DrawToTexture()
@@ -48,6 +62,9 @@ public class PctDrawList : IDisposable
             texture.TextureId,
             ImGuiHelpers.MainViewport.Pos,
             ImGuiHelpers.MainViewport.Pos + texture.Size);
+
+        if (isMyWindow)
+            ImGui.End();
     }
 
     /// <summary>
