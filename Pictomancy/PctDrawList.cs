@@ -1,40 +1,47 @@
 using Dalamud.Interface.Utility;
 using Pictomancy.DXDraw;
 using Pictomancy.ImGuiDraw;
-using System.Drawing;
 using System.Numerics;
 
 namespace Pictomancy;
 public class PctDrawList : IDisposable
 {
     internal readonly ImDrawListPtr _drawList;
+    internal readonly ImDrawListPtr _textDrawList;
     internal readonly List<Vector3> _path;
     internal readonly DXRenderer _renderer;
     internal readonly ImGuiRenderer _fallbackRenderer;
-    internal readonly AddonClipper _addonClipper;
     internal readonly bool isMyWindow;
     private PctTexture? _texture;
     internal bool Finalized => _texture != null;
 
-    internal PctDrawList(ImDrawListPtr? drawlist, DXRenderer renderer, AddonClipper addonClipper)
+    internal PctDrawList(ImDrawListPtr? drawlist, DXRenderer renderer)
     {
-        if (drawlist == null)
+        if (drawlist != null)
         {
+            _drawList = _textDrawList = (ImDrawListPtr)drawlist;
+        }
+        else
+        {
+            _drawList = ImGui.GetBackgroundDrawList();
             ImGuiHelpers.ForceNextWindowMainViewport();
             ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, Vector2.Zero);
             ImGuiHelpers.SetNextWindowPosRelativeMainViewport(Vector2.Zero);
             ImGui.SetNextWindowSize(ImGuiHelpers.MainViewport.Size);
             if (ImGui.Begin("PctWindow#" + PictoService.PluginInterface.InternalName, ImGuiWindowFlags.NoInputs | ImGuiWindowFlags.NoNav | ImGuiWindowFlags.NoTitleBar | ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoBackground | ImGuiWindowFlags.AlwaysUseWindowPadding | ImGuiWindowFlags.NoSavedSettings | ImGuiWindowFlags.NoFocusOnAppearing))
             {
-                drawlist = ImGui.GetWindowDrawList();
+                CImGui.igBringWindowToDisplayBack(CImGui.igGetCurrentWindow());
+                _textDrawList = ImGui.GetWindowDrawList();
                 isMyWindow = true;
+            }
+            else
+            {
+                _textDrawList = ImGui.GetBackgroundDrawList();
             }
             ImGui.PopStyleVar();
         }
-        _drawList = drawlist ?? ImGui.GetBackgroundDrawList();
         _path = new();
         _renderer = renderer;
-        _addonClipper = addonClipper;
         _texture = null;
         _renderer.BeginFrame();
         _fallbackRenderer = new(_drawList);
@@ -44,8 +51,6 @@ public class PctDrawList : IDisposable
     {
         if (_texture == null)
         {
-            if (PictoService.Hints.ClipNativeUI)
-                _addonClipper.Clip(_renderer);
             var target = _renderer.EndFrame();
             _texture = target.Texture;
         }
@@ -83,7 +88,7 @@ public class PctDrawList : IDisposable
         }
         ImGui.SetWindowFontScale(scale);
         var textPosition = position2D - (ImGui.CalcTextSize(text) / 2f);
-        _drawList.AddText(textPosition, color, text);
+        _textDrawList.AddText(textPosition, color, text);
         ImGui.SetWindowFontScale(1f);
     }
 
@@ -232,15 +237,4 @@ public class PctDrawList : IDisposable
     {
         _renderer.DrawFan(origin, innerRadius, outerRadius, minAngle, maxAngle, color, outerColor ?? color, numSegments);
     }
-
-    public void AddClipZone(Rectangle rectangle, float alpha = 0)
-    {
-        _renderer.AddClipRect(new(rectangle.Left, rectangle.Top), new(rectangle.Width, rectangle.Height), alpha);
-    }
-    /*
-    public void AddClipZoneTri(Vector2 a, Vector2 b, Vector2 c, float alpha = 0)
-    {
-        _renderer.AddClipTri(a, b, c, alpha);
-    }
-    */
 }

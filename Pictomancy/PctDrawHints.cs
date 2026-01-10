@@ -10,7 +10,6 @@
 /// <param name="autoDraw">Automatically draw to ImGui drawlist. If disabled, pictomancy only draws to a texture.</param>
 /// <param name="maxAlpha">Max alpha value 0-255.</param>
 /// <param name="alphaBlendMode">Alpha blend mode. Check AlphaBlendMode file for mode descriptions.</param>
-/// <param name="clipNativeUI">Clip native UI if possible.</param>
 ///
 public record struct PctDrawHints(
     bool drawInCutscene = false,
@@ -28,5 +27,4 @@ public record struct PctDrawHints(
     public bool AutoDraw => autoDraw;
     public float MaxAlphaFraction => maxAlpha / 255f;
     public AlphaBlendMode AlphaBlendMode => alphaBlendMode;
-    public bool ClipNativeUI => clipNativeUI;
 }

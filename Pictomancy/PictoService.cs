@@ -20,7 +20,6 @@ public class PictoService
     [PluginService] internal static IFramework Framework { get; private set; } = null!;
 
     private static DXRenderer? _dxRenderer;
-    private static AddonClipper? _addonClipper;
     private static VfxRenderer? _vfxRenderer;
     public static VfxRenderer VfxRenderer => _vfxRenderer;
 
@@ -37,7 +36,6 @@ public class PictoService
     {
         InitializePluginServices(pluginInterface);
         _dxRenderer = new();
-        _addonClipper = new();
     }
 
     public static void InitializeVfxRenderer(IDalamudPluginInterface pluginInterface)
@@ -102,8 +100,7 @@ public class PictoService
 
         return DrawList = new PctDrawList(
             imguidrawlist,
-            _dxRenderer,
-            _addonClipper
+            _dxRenderer
         );
     }
 

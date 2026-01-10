@@ -6,7 +6,7 @@ using System.Runtime.InteropServices;
 namespace Pictomancy.DXDraw;
 
 /**
- * Full screen pass shader for correcting alpha multiplication.
+ * Full screen pass shader for alpha correction and Game UI masking.
  * 
  * The main RenderTarget uses alpha blending when rendering.
  * Imgui uses alpha blending when rendering the main RenderTarget's output.
@@ -38,6 +38,8 @@ internal class FullScreenPass : IDisposable
             Constants k : register(b0);
 
             Texture2D<float4> inputTexture : register(t0);
+            Texture2D<float4> maskTexture  : register(t1);
+
             SamplerState TextureSampler
             {
                 Filter = MIN_MAG_MIP_POINT;
@@ -63,11 +65,15 @@ internal class FullScreenPass : IDisposable
             float4 ps(VSOutput input) : SV_Target
             {
                 float4 color = inputTexture.Sample(TextureSampler, input.uv);
+                float4 mask = maskTexture.Sample(TextureSampler, input.uv);
                 if (color.a > 0)
                 {
-                    color.rbg /= color.a;
+                    color.rgb /= color.a;
                 }
-                color.a = min(color.a, k.maxAlpha);
+                // Apply mask alpha squared
+                // (I don't think this is mathematically correct but it looks better)
+                var maskAlpha = 1 - mask.a;
+                color.a = min(color.a, k.maxAlpha) * maskAlpha * maskAlpha;
                 return color;
             }
             """;
@@ -104,9 +110,13 @@ internal class FullScreenPass : IDisposable
         ctx.Context.GeometryShader.Set(null);
     }
 
-    public void Draw(RenderContext ctx)
+    public void Draw(RenderContext ctx, ShaderResourceView baseSRV, ShaderResourceView maskSRV)
     {
+        ctx.Context.PixelShader.SetShaderResource(0, baseSRV);
+        ctx.Context.PixelShader.SetShaderResource(1, maskSRV);
         Bind(ctx);
         ctx.Context.Draw(3, 0);
+        ctx.Context.PixelShader.SetShaderResource(0, null);
+        ctx.Context.PixelShader.SetShaderResource(1, null);
     }
 }

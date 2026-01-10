@@ -1,4 +1,5 @@
 using FFXIVClientStructs.FFXIV.Client.Game.Control;
+using SharpDX.Direct3D11;
 using System.Numerics;
 using Device = FFXIVClientStructs.FFXIV.Client.Graphics.Kernel.Device;
 
@@ -12,13 +13,10 @@ internal class DXRenderer : IDisposable
     public const int MAX_CLIP_ZONES = 512 * 6;
 
     public RenderContext RenderContext { get; init; } = new();
-
     internal RenderTarget? RenderTarget { get; private set; }
-    internal RenderTarget? FSPRenderTarget { get; private set; }
     public TriFill TriFill { get; init; }
     public FanFill FanFill { get; init; }
     public Stroke Stroke { get; init; }
-    public ClipZone ClipZone { get; init; }
     public FullScreenPass FSP { get; init; }
 
     public SharpDX.Matrix ViewProj { get; private set; }
@@ -33,8 +31,6 @@ internal class DXRenderer : IDisposable
     private readonly Stroke.Data _strokeDynamicData;
     private Stroke.Data.Builder? _strokeDynamicBuilder;
 
-    private readonly ClipZone.Data _clipDynamicData;
-    private ClipZone.Data.Builder? _clipDynamicBuilder;
     public bool FanDegraded { get; private set; }
 
     public bool StrokeDegraded { get; private set; }
@@ -69,8 +65,6 @@ internal class DXRenderer : IDisposable
         TriFill = new(RenderContext);
         _triFillDynamicData = new(RenderContext, MAX_TRIS + (FanDegraded ? MAX_FANS * 360 : 0), true);
 
-        ClipZone = new(RenderContext);
-        _clipDynamicData = new(RenderContext, MAX_CLIP_ZONES, true);
         FSP = new(RenderContext);
     }
 
@@ -79,13 +73,10 @@ internal class DXRenderer : IDisposable
         RenderTarget?.Dispose();
         _triFillDynamicBuilder?.Dispose();
         _triFillDynamicData?.Dispose();
-        FSPRenderTarget?.Dispose();
         _fanFillDynamicBuilder?.Dispose();
         _fanFillDynamicData?.Dispose();
         _strokeDynamicBuilder?.Dispose();
         _strokeDynamicData?.Dispose();
-        _clipDynamicBuilder?.Dispose();
-        _clipDynamicData?.Dispose();
         if (!FanDegraded)
         {
             FanFill.Dispose();
@@ -94,7 +85,6 @@ internal class DXRenderer : IDisposable
         {
             Stroke.Dispose();
         }
-        ClipZone.Dispose();
         FSP.Dispose();
         RenderContext.Dispose();
     }
@@ -114,7 +104,6 @@ internal class DXRenderer : IDisposable
         {
             Stroke.UpdateConstants(RenderContext, new() { ViewProj = ViewProj, RenderTargetSize = new(ViewportSize.X, ViewportSize.Y) });
         }
-        ClipZone.UpdateConstants(RenderContext, new() { RenderTargetSize = new(ViewportSize.X, ViewportSize.Y) });
         FSP.UpdateConstants(RenderContext, new() { MaxAlpha = PictoService.Hints.MaxAlphaFraction });
 
         if (RenderTarget == null || RenderTarget.Size != ViewportSize)
@@ -122,17 +111,11 @@ internal class DXRenderer : IDisposable
             RenderTarget?.Dispose();
             RenderTarget = new(RenderContext, (int)ViewportSize.X, (int)ViewportSize.Y, PictoService.Hints.AlphaBlendMode);
         }
-        if (FSPRenderTarget == null || FSPRenderTarget.Size != ViewportSize)
-        {
-            FSPRenderTarget?.Dispose();
-            FSPRenderTarget = new(RenderContext, (int)ViewportSize.X, (int)ViewportSize.Y, AlphaBlendMode.None);
-        }
         RenderTarget.Bind(RenderContext);
     }
 
-    internal RenderTarget EndFrame()
+    internal unsafe RenderTarget EndFrame()
     {
-        // Draw all shapes and and perform clipping for the main RenderTarget.
         if (_triFillDynamicBuilder != null)
         {
             _triFillDynamicBuilder.Dispose();
@@ -151,19 +134,23 @@ internal class DXRenderer : IDisposable
             _strokeDynamicBuilder = null;
             Stroke.Draw(RenderContext, _strokeDynamicData);
         }
-        RenderTarget!.Clip(RenderContext);
-        if (_clipDynamicBuilder != null)
+
+        var device = Device.Instance();
+        if (device != null &&
+            device->SwapChain != null &&
+            device->SwapChain->BackBuffer != null &&
+            device->SwapChain->BackBuffer->D3D11Texture2D != null)
         {
-            _clipDynamicBuilder.Dispose();
-            _clipDynamicBuilder = null;
-            ClipZone.Draw(RenderContext, _clipDynamicData);
+            var backBuffer = new Texture2D((IntPtr)Device.Instance()->SwapChain->BackBuffer->D3D11Texture2D);
+            RenderTarget!.ExecuteFSP(RenderContext, backBuffer, FSP);
         }
-        // Plumb the main RenderTarget to the full screen pass for alpha correction.
-        FSPRenderTarget!.Bind(RenderContext, RenderTarget);
-        FSP.Draw(RenderContext);
+        else
+        {
+            PictoService.Log.Warning("[Pictomancy] DXRenderer.EndFrame: Device or BackBuffer is null; skipping combined pass.");
+        }
 
         RenderContext.Execute();
-        return FSPRenderTarget;
+        return RenderTarget;
     }
     public void DrawText(Vector2 position, string text)
     {
@@ -237,27 +224,6 @@ internal class DXRenderer : IDisposable
     }
 
     private Stroke.Data.Builder GetStroke() => _strokeDynamicBuilder ??= _strokeDynamicData.Map(RenderContext);
-
-    public void AddClipRect(Vector2 upperleft, Vector2 size, float alpha = 0)
-    {
-        Vector2 width = new(size.X, 0);
-        Vector2 height = new(0, size.Y);
-
-        GetClipZones().Add(upperleft, alpha);
-        GetClipZones().Add(upperleft + width, alpha);
-        GetClipZones().Add(upperleft + width + height, alpha);
-
-        GetClipZones().Add(upperleft, alpha);
-        GetClipZones().Add(upperleft + width + height, alpha);
-        GetClipZones().Add(upperleft + height, alpha);
-    }
-    public void AddClipTri(Vector2 a, Vector2 b, Vector2 c, float alpha = 0)
-    {
-        GetClipZones().Add(a, alpha);
-        GetClipZones().Add(b, alpha);
-        GetClipZones().Add(c, alpha);
-    }
-    private ClipZone.Data.Builder GetClipZones() => _clipDynamicBuilder ??= _clipDynamicData.Map(RenderContext);
 
     private static unsafe SharpDX.Matrix ReadMatrix(IntPtr address)
     {
