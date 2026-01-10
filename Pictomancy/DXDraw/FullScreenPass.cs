@@ -72,7 +72,7 @@ internal class FullScreenPass : IDisposable
                 }
                 // Apply mask alpha squared
                 // (I don't think this is mathematically correct but it looks better)
-                var maskAlpha = 1 - mask.a;
+                float maskAlpha = 1 - mask.a;
                 color.a = min(color.a, k.maxAlpha) * maskAlpha * maskAlpha;
                 return color;
             }
