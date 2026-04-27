@@ -35,12 +35,12 @@ public static unsafe class VfxFunctions
 
     internal static void Initialize()
     {
-        VfxInitDataCtor = Marshal.GetDelegateForFunctionPointer<VfxInitDataCtorDelegate>(PictoService.SigScanner.ScanText(VfxInitDataCtorSig));
-        CreateVfx = Marshal.GetDelegateForFunctionPointer<CreateVfxDelegate>(PictoService.SigScanner.ScanText(CreateVfxSig));
-        CreateGameObjectVfxInternal = Marshal.GetDelegateForFunctionPointer<CreateGameObjectVfxDelegate>(PictoService.SigScanner.ScanText(CreateGameObjectVfxSig));
-        DestroyVfx = Marshal.GetDelegateForFunctionPointer<DestroyVfxDataDelegate>(PictoService.SigScanner.ScanText(DestroyVfxSig));
-        UpdateVfxTransform = Marshal.GetDelegateForFunctionPointer<UpdateVfxTransformDelegate>(PictoService.SigScanner.ScanText(UpdateVfxTransformSig));
-        UpdateVfxColor = Marshal.GetDelegateForFunctionPointer<UpdateVfxColorDelegate>(PictoService.SigScanner.ScanText(UpdateVfxColorSig));
-        RotateMatrix = Marshal.GetDelegateForFunctionPointer<RotateMatrixDelegate>(PictoService.SigScanner.ScanText(RotateMatrixSig));
+        VfxInitDataCtor = Marshal.GetDelegateForFunctionPointer<VfxInitDataCtorDelegate>(PctService.SigScanner.ScanText(VfxInitDataCtorSig));
+        CreateVfx = Marshal.GetDelegateForFunctionPointer<CreateVfxDelegate>(PctService.SigScanner.ScanText(CreateVfxSig));
+        CreateGameObjectVfxInternal = Marshal.GetDelegateForFunctionPointer<CreateGameObjectVfxDelegate>(PctService.SigScanner.ScanText(CreateGameObjectVfxSig));
+        DestroyVfx = Marshal.GetDelegateForFunctionPointer<DestroyVfxDataDelegate>(PctService.SigScanner.ScanText(DestroyVfxSig));
+        UpdateVfxTransform = Marshal.GetDelegateForFunctionPointer<UpdateVfxTransformDelegate>(PctService.SigScanner.ScanText(UpdateVfxTransformSig));
+        UpdateVfxColor = Marshal.GetDelegateForFunctionPointer<UpdateVfxColorDelegate>(PctService.SigScanner.ScanText(UpdateVfxColorSig));
+        RotateMatrix = Marshal.GetDelegateForFunctionPointer<RotateMatrixDelegate>(PctService.SigScanner.ScanText(RotateMatrixSig));
     }
 }

@@ -61,7 +61,14 @@ internal class RenderBuffer<T> : IDisposable where T : unmanaged
         public unsafe void Add(ref T item)
         {
             if (_buffer.CurElements >= _buffer.MaxElements)
-                throw new IndexOutOfRangeException(_buffer.FriendlyName + " max buffer size of " + _buffer.MaxElements + " exceeded. Futher elements will not be displayed.");
+            {
+                if (!_buffer._hasWarnedOverflow)
+                {
+                    _buffer._hasWarnedOverflow = true;
+                    PctService.Log.Warning($"[Pictomancy] {_buffer.FriendlyName} buffer full ({_buffer.MaxElements} elements); further elements will be dropped. Increase the matching PctOptions limit.");
+                }
+                return;
+            }
             ++_buffer.CurElements;
             _stream.Write((nint)Unsafe.AsPointer(ref item), 0, sizeof(T));
         }
@@ -74,6 +81,7 @@ internal class RenderBuffer<T> : IDisposable where T : unmanaged
     public int MaxElements { get; init; }
     public int CurElements { get; private set; }
     public Buffer Buffer { get; init; }
+    private bool _hasWarnedOverflow;
 
     public unsafe RenderBuffer(string friendlyName, RenderContext ctx, int maxElements, BindFlags bindFlags, bool dynamic)
     {

@@ -7,85 +7,109 @@ namespace Pictomancy.DXDraw;
 
 internal class DXRenderer : IDisposable
 {
-    public const int MAX_FANS = 2048;
-    public const int MAX_TRIS = 1024;
-    public const int MAX_STROKE_SEGMENTS = MAX_FANS * Stroke.MAXIMUM_ARC_SEGMENTS / 2;
-    public const int MAX_CLIP_ZONES = 512 * 6;
-
     public RenderContext RenderContext { get; init; } = new();
     internal RenderTarget? RenderTarget { get; private set; }
     public TriFill TriFill { get; init; }
-    public FanFill FanFill { get; init; }
-    public Stroke Stroke { get; init; }
+    public FanFill? FanFill { get; init; }
+    public Stroke? Stroke { get; init; }
     public FullScreenPass FSP { get; init; }
+    public DepthResample DepthResample { get; init; }
+    public ClipZone ClipZone { get; init; }
+
+    private readonly DepthStencilState _resampleDSS;
+    private readonly DepthStencilState _clipZoneDSS;
+    private readonly DepthStencilState _shapeDSS;
 
     public SharpDX.Matrix ViewProj { get; private set; }
     public SharpDX.Vector2 ViewportSize { get; private set; }
 
-    private readonly TriFill.Data _triFillDynamicData;
-    private TriFill.Data.Builder? _triFillDynamicBuilder;
+    public bool FanDegraded => FanFill == null;
 
-    private readonly FanFill.Data _fanFillDynamicData;
-    private FanFill.Data.Builder? _fanFillDynamicBuilder;
+    public bool StrokeDegraded => Stroke == null;
 
-    private readonly Stroke.Data _strokeDynamicData;
-    private Stroke.Data.Builder? _strokeDynamicBuilder;
-
-    public bool FanDegraded { get; private set; }
-
-    public bool StrokeDegraded { get; private set; }
-
-    public DXRenderer()
+    public DXRenderer(PctOptions options)
     {
         try
         {
             // uncomment to test linux fanfill fallback renderer
-            // throw new Exception("test exception please ignore");
-            FanFill = new(RenderContext);
+            //throw new Exception("test exception please ignore");
+            FanFill = new(RenderContext, options.MaxFans);
         }
         catch (Exception)
         {
-            PictoService.Log.Error("[Pictomancy] Failed to compile fan shader; starting in degraded mode.");
-            FanDegraded = true;
+            PctService.Log.Error("[Pictomancy] Failed to compile fan shader; starting in degraded mode.");
         }
-        _fanFillDynamicData = new(RenderContext, FanDegraded ? 1 : MAX_FANS, true);
         try
         {
             // uncomment to test linux imgui fallback renderer
-            // throw new Exception("test exception please ignore");
-            Stroke = new(RenderContext);
+            //throw new Exception("test exception please ignore");
+            Stroke = new(RenderContext, options.MaxStrokeSegments);
         }
         catch (Exception)
         {
-            PictoService.Log.Error("[Pictomancy] Failed to compile stroke shader; starting in degraded mode.");
-            StrokeDegraded = true;
+            PctService.Log.Error("[Pictomancy] Failed to compile stroke shader; starting in degraded mode.");
         }
-        _strokeDynamicData = new(RenderContext, StrokeDegraded ? 1 : MAX_STROKE_SEGMENTS, true);
 
-        TriFill = new(RenderContext);
-        _triFillDynamicData = new(RenderContext, MAX_TRIS + (FanDegraded ? MAX_FANS * 360 : 0), true);
+        // TriFill's buffer doubles as the fan-fallback path's storage in degraded mode.
+        TriFill = new(RenderContext, options.MaxTriangleVertices + (FanDegraded ? options.MaxFans * 360 : 0));
 
         FSP = new(RenderContext);
+        DepthResample = new(RenderContext);
+        ClipZone = new(RenderContext, options.MaxClipZones);
+
+        var resampleDesc = DepthStencilStateDescription.Default();
+        resampleDesc.IsDepthEnabled = true;
+        resampleDesc.DepthWriteMask = DepthWriteMask.All;
+        resampleDesc.DepthComparison = Comparison.Always;
+        resampleDesc.IsStencilEnabled = false;
+        _resampleDSS = new(RenderContext.Device, resampleDesc);
+
+        var clipZoneDesc = DepthStencilStateDescription.Default();
+        clipZoneDesc.IsDepthEnabled = false;
+        clipZoneDesc.DepthWriteMask = DepthWriteMask.Zero;
+        clipZoneDesc.IsStencilEnabled = true;
+        clipZoneDesc.StencilReadMask = 0xFF;
+        clipZoneDesc.StencilWriteMask = 0xFF;
+        clipZoneDesc.FrontFace = new DepthStencilOperationDescription
+        {
+            FailOperation = StencilOperation.Keep,
+            DepthFailOperation = StencilOperation.Keep,
+            PassOperation = StencilOperation.Replace,
+            Comparison = Comparison.Always,
+        };
+        clipZoneDesc.BackFace = clipZoneDesc.FrontFace;
+        _clipZoneDSS = new(RenderContext.Device, clipZoneDesc);
+
+        var shapeDesc = DepthStencilStateDescription.Default();
+        shapeDesc.IsDepthEnabled = true;
+        shapeDesc.DepthWriteMask = DepthWriteMask.Zero;
+        shapeDesc.DepthComparison = Comparison.GreaterEqual;
+        shapeDesc.IsStencilEnabled = true;
+        shapeDesc.StencilReadMask = 0xFF;
+        shapeDesc.StencilWriteMask = 0;
+        shapeDesc.FrontFace = new DepthStencilOperationDescription
+        {
+            FailOperation = StencilOperation.Keep,
+            DepthFailOperation = StencilOperation.Keep,
+            PassOperation = StencilOperation.Keep,
+            Comparison = Comparison.Equal,
+        };
+        shapeDesc.BackFace = shapeDesc.FrontFace;
+        _shapeDSS = new(RenderContext.Device, shapeDesc);
     }
 
     public void Dispose()
     {
         RenderTarget?.Dispose();
-        _triFillDynamicBuilder?.Dispose();
-        _triFillDynamicData?.Dispose();
-        _fanFillDynamicBuilder?.Dispose();
-        _fanFillDynamicData?.Dispose();
-        _strokeDynamicBuilder?.Dispose();
-        _strokeDynamicData?.Dispose();
-        if (!FanDegraded)
-        {
-            FanFill.Dispose();
-        }
-        if (!StrokeDegraded)
-        {
-            Stroke.Dispose();
-        }
+        TriFill.Dispose();
+        FanFill?.Dispose();
+        Stroke?.Dispose();
+        ClipZone.Dispose();
         FSP.Dispose();
+        DepthResample.Dispose();
+        _resampleDSS.Dispose();
+        _clipZoneDSS.Dispose();
+        _shapeDSS.Dispose();
         RenderContext.Dispose();
     }
 
@@ -95,45 +119,66 @@ internal class DXRenderer : IDisposable
         ViewportSize = new(device->Width, device->Height);
         ViewProj = *(SharpDX.Matrix*)&Control.Instance()->ViewProjectionMatrix;
 
-        TriFill.UpdateConstants(RenderContext, new() { ViewProj = ViewProj });
-        if (!FanDegraded)
+        // Detect 3D resolution scaling
+        bool resolutionScaled = false;
+        var rtm = FFXIVClientStructs.FFXIV.Client.Graphics.Render.RenderTargetManager.Instance();
+        var unk70 = rtm != null ? *(FFXIVClientStructs.FFXIV.Client.Graphics.Kernel.Texture**)((byte*)rtm + 0x70) : null;
+        if (unk70 != null)
         {
-            FanFill.UpdateConstants(RenderContext, new() { ViewProj = ViewProj });
+            resolutionScaled = unk70->ActualWidth != device->Width || unk70->ActualHeight != device->Height;
         }
-        if (!StrokeDegraded)
+        bool useMask = PctService.Hints.UIMask == UIMask.BackbufferAlpha
+            && PctService.Hints.AutoDraw != AutoDraw.NativeOverlay
+            && !resolutionScaled;
+        FSP.UpdateConstants(RenderContext, new()
         {
-            Stroke.UpdateConstants(RenderContext, new() { ViewProj = ViewProj, RenderTargetSize = new(ViewportSize.X, ViewportSize.Y) });
-        }
-        FSP.UpdateConstants(RenderContext, new() { MaxAlpha = PictoService.Hints.MaxAlphaFraction });
+            MaxAlpha = PctService.Hints.MaxAlphaFraction,
+            UseMask = useMask ? 1f : 0f,
+        });
 
         if (RenderTarget == null || RenderTarget.Size != ViewportSize)
         {
             RenderTarget?.Dispose();
-            RenderTarget = new(RenderContext, (int)ViewportSize.X, (int)ViewportSize.Y, PictoService.Hints.AlphaBlendMode);
+            RenderTarget = new(RenderContext, (int)ViewportSize.X, (int)ViewportSize.Y, PctService.Hints.AlphaBlendMode);
         }
         RenderTarget.Bind(RenderContext);
     }
 
-    internal unsafe RenderTarget EndFrame()
+    internal unsafe RenderTarget EndFrame(ShaderResourceView? sceneDepthSRV, SharpDX.Vector2 sceneDepthUvScale)
     {
-        if (_triFillDynamicBuilder != null)
+        TriFill.UpdateConstants(new() { ViewProj = ViewProj });
+        FanFill?.UpdateConstants(new() { ViewProj = ViewProj });
+        Stroke?.UpdateConstants(new() { ViewProj = ViewProj, RenderTargetSize = new Vector2(ViewportSize.X, ViewportSize.Y) });
+
+        bool hasShapes = TriFill.HasPending || FanFill?.HasPending == true || Stroke?.HasPending == true;
+        bool hasClipZones = ClipZone.HasPending;
+
+        if (hasShapes && sceneDepthSRV != null)
         {
-            _triFillDynamicBuilder.Dispose();
-            _triFillDynamicBuilder = null;
-            TriFill.Draw(RenderContext, _triFillDynamicData);
+            // Resample scene depth into our viewport-sized DSV.
+            RenderContext.Context.OutputMerger.SetTargets(RenderTarget!.LocalDepthDSV);
+            RenderContext.Context.ClearDepthStencilView(RenderTarget.LocalDepthDSV, DepthStencilClearFlags.Depth | DepthStencilClearFlags.Stencil, 0f, 0);
+            RenderContext.Context.OutputMerger.SetDepthStencilState(_resampleDSS);
+            float near = ViewProj.M43;
+            float viewProjBias = near > 0f ? PctService.Hints.DepthBias / near : 0f;
+            DepthResample.Draw(RenderContext, sceneDepthSRV, sceneDepthUvScale, viewProjBias);
+
+            if (hasClipZones)
+            {
+                // Stamp stencil = 1 inside each clip rect.
+                ClipZone.UpdateConstants(new() { ViewportSize = new Vector2(ViewportSize.X, ViewportSize.Y) });
+                RenderContext.Context.OutputMerger.SetDepthStencilState(_clipZoneDSS, 1);
+                ClipZone.Flush();
+            }
+
+            // Bind RTV+DSV with read-only depth-test for shape draws.
+            RenderContext.Context.OutputMerger.SetTargets(RenderTarget.LocalDepthDSV, RenderTarget.BaseRTV);
+            RenderContext.Context.OutputMerger.SetDepthStencilState(_shapeDSS, 0);
         }
-        if (!FanDegraded && _fanFillDynamicBuilder != null)
-        {
-            _fanFillDynamicBuilder.Dispose();
-            _fanFillDynamicBuilder = null;
-            FanFill.Draw(RenderContext, _fanFillDynamicData);
-        }
-        if (!StrokeDegraded && _strokeDynamicBuilder != null)
-        {
-            _strokeDynamicBuilder.Dispose();
-            _strokeDynamicBuilder = null;
-            Stroke.Draw(RenderContext, _strokeDynamicData);
-        }
+
+        TriFill.Flush();
+        FanFill?.Flush();
+        Stroke?.Flush();
 
         var device = Device.Instance();
         if (device != null &&
@@ -141,12 +186,12 @@ internal class DXRenderer : IDisposable
             device->SwapChain->BackBuffer != null &&
             device->SwapChain->BackBuffer->D3D11Texture2D != null)
         {
-            var backBuffer = new Texture2D((IntPtr)Device.Instance()->SwapChain->BackBuffer->D3D11Texture2D);
+            var backBuffer = new Texture2D((IntPtr)device->SwapChain->BackBuffer->D3D11Texture2D);
             RenderTarget!.ExecuteFSP(RenderContext, backBuffer, FSP);
         }
         else
         {
-            PictoService.Log.Warning("[Pictomancy] DXRenderer.EndFrame: Device or BackBuffer is null; skipping combined pass.");
+            PctService.Log.Warning("[Pictomancy] DXRenderer.EndFrame: Device or BackBuffer is null; skipping combined pass.");
         }
 
         RenderContext.Execute();
@@ -160,12 +205,9 @@ internal class DXRenderer : IDisposable
         //RenderContext.Context2.EndDraw();
     }
     public void DrawTriangle(Vector3 a, Vector3 b, Vector3 c, uint colorA, uint colorB, uint colorC)
-    {
-        GetTriFills().Add(a, colorA.ToVector4());
-        GetTriFills().Add(b, colorB.ToVector4());
-        GetTriFills().Add(c, colorC.ToVector4());
-    }
-    private TriFill.Data.Builder GetTriFills() => _triFillDynamicBuilder ??= _triFillDynamicData.Map(RenderContext);
+        => TriFill.Add(a, b, c, colorA, colorB, colorC);
+
+    public void AddClipZone(Vector2 min, Vector2 max) => ClipZone.Add(min, max);
 
     private void DrawTriangleFan(Vector3 center, float innerRadius, float outerRadius, float minAngle, float maxAngle, uint innerColor, uint outerColor, uint numSegments = 0)
     {
@@ -199,31 +241,18 @@ internal class DXRenderer : IDisposable
     {
         if (!FanDegraded && numSegments == 0)
         {
-            GetFanFills().Add(
-                center,
-                innerRadius,
-                outerRadius,
-                minAngle,
-                maxAngle,
-                innerColor.ToVector4(),
-                outerColor.ToVector4());
+            FanFill.Add(center, innerRadius, outerRadius, minAngle, maxAngle, innerColor, outerColor);
         }
         else
         {
             DrawTriangleFan(center, innerRadius, outerRadius, minAngle, maxAngle, innerColor, outerColor, numSegments);
         }
     }
-    private FanFill.Data.Builder GetFanFills() => _fanFillDynamicBuilder ??= _fanFillDynamicData.Map(RenderContext);
 
     public void DrawStroke(IEnumerable<Vector3> world, float thickness, uint color, bool closed = false)
     {
-        if (!StrokeDegraded)
-        {
-            GetStroke().Add(world.ToArray(), thickness, color.ToVector4(), closed);
-        }
+        Stroke?.Add(world.ToArray(), thickness, color, closed);
     }
-
-    private Stroke.Data.Builder GetStroke() => _strokeDynamicBuilder ??= _strokeDynamicData.Map(RenderContext);
 
     private static unsafe SharpDX.Matrix ReadMatrix(IntPtr address)
     {

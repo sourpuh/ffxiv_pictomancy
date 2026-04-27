@@ -30,7 +30,7 @@ internal class Stroke : IDisposable
         public ushort Index;
     }
 
-    public class Data : IDisposable
+    private class Data : IDisposable
     {
         public class Builder : IDisposable
         {
@@ -96,23 +96,29 @@ internal class Stroke : IDisposable
         public void DrawAll(RenderContext ctx) => DrawSubset(ctx, 0, _buffer.CurElements);
     }
 
+    private readonly RenderContext _ctx;
+    private readonly Data _data;
+    private Data.Builder? _builder;
     private readonly SharpDX.Direct3D11.Buffer _constantBuffer;
     private readonly InputLayout _il;
     private readonly VertexShader _vs;
     private readonly GeometryShader _gs;
     private readonly PixelShader _ps;
 
-    public Stroke(RenderContext ctx)
+    public bool HasPending => _builder != null;
+
+    public Stroke(RenderContext ctx, int maxSegments)
     {
+        _ctx = ctx;
+        _data = new(ctx, maxSegments, true);
         var shader = """
             #define FEATHER 2
             
-            struct Constants
+            cbuffer Constants : register(b0)
             {
                 float4x4 viewProj;
                 float2 renderTargetSize;
             };
-            Constants k : register(c0);
 
             struct Line
             {
@@ -146,7 +152,7 @@ internal class Stroke : IDisposable
                 v.color = l.color;
                 v.index = l.index;
 
-                v.projPos = mul(float4(l.world, 1), k.viewProj);
+                v.projPos = mul(float4(l.world, 1), viewProj);
                 return v;
             }
 
@@ -154,7 +160,7 @@ internal class Stroke : IDisposable
             {
                 float3 dir = normalize(p1 - p0);
 
-                float3 ratio = float3(k.renderTargetSize.y, k.renderTargetSize.x, 0);
+                float3 ratio = float3(renderTargetSize.y, renderTargetSize.x, 0);
                 ratio = normalize(ratio);
             
                 float3 unit_z = normalize(float3(0, 0, -1));
@@ -203,10 +209,10 @@ internal class Stroke : IDisposable
                 float4 normal = get_normal(p0, p1);
 
                 float4 start_normal = normal;
-                start_normal.xy *= (start.thickness) / k.renderTargetSize.y;
+                start_normal.xy *= (start.thickness) / renderTargetSize.y;
 
                 float4 stop_normal = normal;
-                stop_normal.xy *= (stop.thickness) / k.renderTargetSize.y;
+                stop_normal.xy *= (stop.thickness) / renderTargetSize.y;
 
                 GSOutput v;
                 v.thickness = start.thickness;
@@ -247,15 +253,15 @@ internal class Stroke : IDisposable
             """;
 
         var vs = ShaderBytecode.Compile(shader, "vs", "vs_5_0");
-        PictoService.Log.Debug($"Line VS compile: {vs.Message}");
+        PctService.Log.Debug($"Line VS compile: {vs.Message}");
         _vs = new(ctx.Device, vs.Bytecode);
 
         var gs = ShaderBytecode.Compile(shader, "gs", "gs_5_0");
-        PictoService.Log.Debug($"Line GS compile: {gs.Message}");
+        PctService.Log.Debug($"Line GS compile: {gs.Message}");
         _gs = new(ctx.Device, gs.Bytecode);
 
         var ps = ShaderBytecode.Compile(shader, "ps", "ps_5_0");
-        PictoService.Log.Debug($"Line PS compile: {ps.Message}");
+        PctService.Log.Debug($"Line PS compile: {ps.Message}");
         _ps = new(ctx.Device, ps.Bytecode);
 
 
@@ -272,6 +278,8 @@ internal class Stroke : IDisposable
 
     public void Dispose()
     {
+        _builder?.Dispose();
+        _data.Dispose();
         _constantBuffer.Dispose();
         _il.Dispose();
         _vs.Dispose();
@@ -279,27 +287,35 @@ internal class Stroke : IDisposable
         _ps.Dispose();
     }
 
-    public void UpdateConstants(RenderContext ctx, Constants consts)
+    public void UpdateConstants(Constants consts)
     {
         consts.ViewProj.Transpose();
-        ctx.Context.UpdateSubresource(ref consts, _constantBuffer);
+        _ctx.Context.UpdateSubresource(ref consts, _constantBuffer);
     }
 
-    public void Bind(RenderContext ctx)
+    public void Add(Vector3[] world, float thickness, uint color, bool closed)
     {
-        ctx.Context.InputAssembler.PrimitiveTopology = PrimitiveTopology.LineStrip;
-        ctx.Context.InputAssembler.InputLayout = _il;
-        ctx.Context.VertexShader.Set(_vs);
-        ctx.Context.VertexShader.SetConstantBuffer(0, _constantBuffer);
-        ctx.Context.GeometryShader.Set(_gs);
-        ctx.Context.GeometryShader.SetConstantBuffer(0, _constantBuffer);
-        ctx.Context.PixelShader.Set(_ps);
+        (_builder ??= _data.Map(_ctx)).Add(world, thickness, color.ToVector4(), closed);
     }
 
-    // shortcut to bind + draw
-    public void Draw(RenderContext ctx, Data data)
+    public void Flush()
     {
-        Bind(ctx);
-        data.DrawAll(ctx);
+        if (_builder == null) return;
+        _builder.Dispose();
+        _builder = null;
+        Bind();
+        _data.DrawAll(_ctx);
     }
+
+    private void Bind()
+    {
+        _ctx.Context.InputAssembler.PrimitiveTopology = PrimitiveTopology.LineStrip;
+        _ctx.Context.InputAssembler.InputLayout = _il;
+        _ctx.Context.VertexShader.Set(_vs);
+        _ctx.Context.VertexShader.SetConstantBuffer(0, _constantBuffer);
+        _ctx.Context.GeometryShader.Set(_gs);
+        _ctx.Context.GeometryShader.SetConstantBuffer(0, _constantBuffer);
+        _ctx.Context.PixelShader.Set(_ps);
+    }
+
 }

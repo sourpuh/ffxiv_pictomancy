@@ -1,0 +1,10 @@
+{
+  "Name": "Pictomancy Demo",
+  "Author": "sourpuh",
+  "Punchline": "Test bench for Pictomancy library changes.",
+  "Description": "Demo plugin that exercises the Pictomancy drawing API. Open with /pctdemo.",
+  "InternalName": "PictomancyDemo",
+  "RepoUrl": "https://github.com/sourpuh/ffxiv_pictomancy",
+  "ApplicableVersion": "any",
+  "Tags": [ "dev", "demo", "pictomancy" ]
+}

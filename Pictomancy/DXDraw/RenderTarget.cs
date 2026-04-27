@@ -1,10 +1,9 @@
-using SharpDX.Direct3D;
 using SharpDX.Direct3D11;
 using Format = SharpDX.DXGI.Format;
 
 namespace Pictomancy.DXDraw;
 
-internal unsafe class RenderTarget : IDisposable
+internal class RenderTarget : IDisposable
 {
     public SharpDX.Vector2 Size { get; private set; }
     public uint Width => (uint)Size.X;
@@ -21,10 +20,25 @@ internal unsafe class RenderTarget : IDisposable
     private Texture2D? _backBufferCopy;
     private ShaderResourceView? _backBufferSRV;
 
+    // Local depth-stencil at viewport size, written by DepthResample and used as DSV during shape draws.
+    private readonly Texture2D _localDepth;
+    private readonly DepthStencilView _localDepthDSV;
+    internal DepthStencilView LocalDepthDSV => _localDepthDSV;
+    internal RenderTargetView BaseRTV => _baseRTV;
+
     private readonly BlendState _defaultBlendState;
 
     public nint ImguiHandle => _processedSRV.NativePointer;
     public PctTexture Texture => new(ImguiHandle, Width, Height);
+
+    /// <summary>
+    /// The processed texture for use with the overlay system.
+    /// </summary>
+    public Texture2D ProcessedTexture => _processedRT;
+    /// <summary>
+    /// The processed SRV for use with the overlay system.
+    /// </summary>
+    public ShaderResourceView ProcessedSRV => _processedSRV;
 
     public RenderTarget(RenderContext ctx, int width, int height, AlphaBlendMode blendMode)
     {
@@ -35,7 +49,7 @@ internal unsafe class RenderTarget : IDisposable
             Height = height,
             MipLevels = 1,
             ArraySize = 1,
-            Format = Format.R8G8B8A8_UNorm,
+            Format = Format.B8G8R8A8_UNorm,
             SampleDescription = new(1, 0),
             Usage = ResourceUsage.Default,
             BindFlags = BindFlags.RenderTarget | BindFlags.ShaderResource,
@@ -50,6 +64,28 @@ internal unsafe class RenderTarget : IDisposable
         _processedRT = new(ctx.Device, desc);
         _processedRTV = new(ctx.Device, _processedRT);
         _processedSRV = new(ctx.Device, _processedRT);
+
+        var depthDesc = new Texture2DDescription
+        {
+            Width = width,
+            Height = height,
+            MipLevels = 1,
+            ArraySize = 1,
+            Format = Format.R24G8_Typeless,
+            SampleDescription = new(1, 0),
+            Usage = ResourceUsage.Default,
+            BindFlags = BindFlags.DepthStencil,
+            CpuAccessFlags = CpuAccessFlags.None,
+            OptionFlags = ResourceOptionFlags.None
+        };
+        _localDepth = new(ctx.Device, depthDesc);
+        var dsvDesc = new DepthStencilViewDescription
+        {
+            Format = Format.D24_UNorm_S8_UInt,
+            Dimension = DepthStencilViewDimension.Texture2D,
+        };
+        dsvDesc.Texture2D.MipSlice = 0;
+        _localDepthDSV = new(ctx.Device, _localDepth, dsvDesc);
 
         var blendDescription = BlendStateDescription.Default();
         if (blendMode != AlphaBlendMode.None)
@@ -116,6 +152,9 @@ internal unsafe class RenderTarget : IDisposable
         _processedRT?.Dispose();
         _processedRTV?.Dispose();
         _processedSRV?.Dispose();
+
+        _localDepth.Dispose();
+        _localDepthDSV.Dispose();
 
         _backBufferCopy?.Dispose();
         _backBufferSRV?.Dispose();

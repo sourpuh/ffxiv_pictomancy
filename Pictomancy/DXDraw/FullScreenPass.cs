@@ -23,6 +23,7 @@ internal class FullScreenPass : IDisposable
     public struct Constants
     {
         public float MaxAlpha;
+        public float UseMask; // 0 = ignore maskTexture (UIClip.None), 1 = sample backbuffer alpha (UIClip.BackbufferAlpha)
     }
 
     private readonly SharpDX.Direct3D11.Buffer _constantBuffer;
@@ -31,11 +32,11 @@ internal class FullScreenPass : IDisposable
     public FullScreenPass(RenderContext ctx)
     {
         var shader = """
-            struct Constants
+            cbuffer Constants : register(b0)
             {
                 float maxAlpha;
+                float useMask;
             };
-            Constants k : register(b0);
 
             Texture2D<float4> inputTexture : register(t0);
             Texture2D<float4> maskTexture  : register(t1);
@@ -65,25 +66,31 @@ internal class FullScreenPass : IDisposable
             float4 ps(VSOutput input) : SV_Target
             {
                 float4 color = inputTexture.Sample(TextureSampler, input.uv);
-                float4 mask = maskTexture.Sample(TextureSampler, input.uv);
                 if (color.a > 0)
                 {
                     color.rgb /= color.a;
                 }
-                // Apply mask alpha squared
-                // (I don't think this is mathematically correct but it looks better)
-                float maskAlpha = 1 - mask.a;
-                color.a = min(color.a, k.maxAlpha) * maskAlpha * maskAlpha;
+
+                float maskAlpha = 1.0;
+                if (useMask > 0.5)
+                {
+                    float4 mask = maskTexture.Sample(TextureSampler, input.uv);
+                    // Apply mask alpha squared.
+                    // (I don't think this is mathematically correct but it looks better)
+                    maskAlpha = 1 - mask.a;
+                    maskAlpha *= maskAlpha;
+                }
+                color.a = min(color.a, maxAlpha) * maskAlpha;
                 return color;
             }
             """;
 
         var vs = ShaderBytecode.Compile(shader, "vs", "vs_5_0");
-        PictoService.Log.Debug($"FSP VS compile: {vs.Message}");
+        PctService.Log.Debug($"FSP VS compile: {vs.Message}");
         _vs = new(ctx.Device, vs.Bytecode);
 
         var ps = ShaderBytecode.Compile(shader, "ps", "ps_5_0");
-        PictoService.Log.Debug($"FSP PS compile: {ps.Message}");
+        PctService.Log.Debug($"FSP PS compile: {ps.Message}");
         _ps = new(ctx.Device, ps.Bytecode);
 
         _constantBuffer = new(ctx.Device, 16, ResourceUsage.Default, BindFlags.ConstantBuffer, CpuAccessFlags.None, ResourceOptionFlags.None, 0);

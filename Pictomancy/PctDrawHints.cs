@@ -1,30 +1,49 @@
-﻿namespace Pictomancy;
+namespace Pictomancy;
 
-///
 /// <summary>
-/// Hints for Pictomancy drawing.
+/// Hints for Pictomancy drawing. Use object-initializer syntax to set just what you need:
+/// <code>
+/// var hints = new PctDrawHints { AutoDraw = AutoDraw.NativeOverlay, DepthBias = 0.005f };
+/// </code>
 /// These are called "hints" instead of "settings" because they may not always be respected.
 /// </summary>
-/// <param name="drawInCutscene">Draw during cutscenes.</param>
-/// <param name="drawWhenFaded">Draw when the game is faded, such as loading a new area.</param>
-/// <param name="autoDraw">Automatically draw to ImGui drawlist. If disabled, pictomancy only draws to a texture.</param>
-/// <param name="maxAlpha">Max alpha value 0-255.</param>
-/// <param name="alphaBlendMode">Alpha blend mode. Check AlphaBlendMode file for mode descriptions.</param>
-///
-public record struct PctDrawHints(
-    bool drawInCutscene = false,
-    bool drawWhenFaded = false,
-    bool autoDraw = true,
-    byte maxAlpha = 255,
-    AlphaBlendMode alphaBlendMode = AlphaBlendMode.Add,
-    bool clipNativeUI = true)
+public record struct PctDrawHints
 {
-    // Surely there's a better way to do this?
-    public PctDrawHints() : this(false, false, true, 255, AlphaBlendMode.Add, true) { }
+    /// <summary>Draw during cutscenes.</summary>
+    public bool DrawInCutscene { get; init; } = false;
 
-    public bool DrawInCutscene => drawInCutscene;
-    public bool DrawWhenFaded => drawWhenFaded;
-    public bool AutoDraw => autoDraw;
-    public float MaxAlphaFraction => maxAlpha / 255f;
-    public AlphaBlendMode AlphaBlendMode => alphaBlendMode;
+    /// <summary>Draw when the game is faded, such as loading a new area.</summary>
+    public bool DrawWhenFaded { get; init; } = false;
+
+    /// <summary>
+    /// How to display the rendered texture. Check AutoDraw file for descriptions.
+    /// </summary>
+    public AutoDraw AutoDraw { get; init; } = AutoDraw.ImGuiOverlay;
+
+    /// <summary>Max alpha value 0-255.</summary>
+    public byte MaxAlpha { get; init; } = 255;
+
+    /// <summary>
+    /// How alpha blending will be performed. Check AlphaBlendMode file for descriptions.
+    /// </summary>
+    public AlphaBlendMode AlphaBlendMode { get; init; } = AlphaBlendMode.Add;
+
+    /// <summary>
+    /// World-space bias added to the scene depth before occlusion testing.
+    /// 0 is strict occlusion. Small values like [0.001, 0.1] keep things visible on non-planar surfaces.
+    /// Larger values bias shapes "forward" so they appear through nearby geometry.
+    /// Infinity disables occlusion entirely.
+    /// </summary>
+    public float DepthBias { get; init; } = float.PositiveInfinity;
+
+    /// <summary>
+    /// How to mask pictomancy output with the game's UI. Check UIMask file for descriptions.
+    /// </summary>
+    public UIMask UIMask { get; init; } = UIMask.BackbufferAlpha;
+
+    public float MaxAlphaFraction => MaxAlpha / 255f;
+
+    // Required so the property initializers actually run for `new PctDrawHints()`.
+    // Without it, `default(PctDrawHints)` skips initializers and zeros all fields.
+    public PctDrawHints() { }
 }

@@ -24,7 +24,7 @@ internal class TriFill : IDisposable
         public Vector4 Color;
     }
 
-    public class Data : IDisposable
+    private class Data : IDisposable
     {
         public class Builder : IDisposable
         {
@@ -73,13 +73,20 @@ internal class TriFill : IDisposable
         public void DrawAll(RenderContext ctx) => DrawSubset(ctx, 0, _buffer.CurElements);
     }
 
+    private readonly RenderContext _ctx;
+    private readonly Data _data;
+    private Data.Builder? _builder;
     private readonly SharpDX.Direct3D11.Buffer _constantBuffer;
     private readonly InputLayout _il;
     private readonly VertexShader _vs;
     private readonly PixelShader _ps;
 
-    public TriFill(RenderContext ctx)
+    public bool HasPending => _builder != null;
+
+    public TriFill(RenderContext ctx, int maxVertices)
     {
+        _ctx = ctx;
+        _data = new(ctx, maxVertices, true);
         var shader = """
             struct Point
             {
@@ -93,16 +100,15 @@ internal class TriFill : IDisposable
                 float4 color : COLOR;
             };
 
-            struct Constants
+            cbuffer Constants : register(b0)
             {
                 float4x4 viewProj;
             };
-            Constants k : register(c0);
 
             VSOutput vs(Point v)
             {
                 VSOutput vs;
-                vs.projPos = mul(float4(v.pos, 1), k.viewProj);
+                vs.projPos = mul(float4(v.pos, 1), viewProj);
                 vs.color = v.color;
                 return vs;
             }
@@ -114,11 +120,11 @@ internal class TriFill : IDisposable
             """;
 
         var vs = ShaderBytecode.Compile(shader, "vs", "vs_5_0");
-        PictoService.Log.Debug($"Point VS compile: {vs.Message}");
+        PctService.Log.Debug($"Point VS compile: {vs.Message}");
         _vs = new(ctx.Device, vs.Bytecode);
 
         var ps = ShaderBytecode.Compile(shader, "ps", "ps_5_0");
-        PictoService.Log.Debug($"Point PS compile: {ps.Message}");
+        PctService.Log.Debug($"Point PS compile: {ps.Message}");
         _ps = new(ctx.Device, ps.Bytecode);
 
         _constantBuffer = new(ctx.Device, 16 * 4, ResourceUsage.Default, BindFlags.ConstantBuffer, CpuAccessFlags.None, ResourceOptionFlags.None, 0);
@@ -131,31 +137,44 @@ internal class TriFill : IDisposable
 
     public void Dispose()
     {
+        _builder?.Dispose();
+        _data.Dispose();
         _constantBuffer.Dispose();
         _il.Dispose();
         _vs.Dispose();
         _ps.Dispose();
     }
 
-    public void UpdateConstants(RenderContext ctx, Constants consts)
+    public void UpdateConstants(Constants consts)
     {
         consts.ViewProj.Transpose();
-        ctx.Context.UpdateSubresource(ref consts, _constantBuffer);
+        _ctx.Context.UpdateSubresource(ref consts, _constantBuffer);
     }
 
-    public void Bind(RenderContext ctx)
+    public void Add(Vector3 a, Vector3 b, Vector3 c, uint colorA, uint colorB, uint colorC)
     {
-        ctx.Context.InputAssembler.PrimitiveTopology = PrimitiveTopology.TriangleList;
-        ctx.Context.InputAssembler.InputLayout = _il;
-        ctx.Context.VertexShader.Set(_vs);
-        ctx.Context.VertexShader.SetConstantBuffer(0, _constantBuffer);
-        ctx.Context.PixelShader.Set(_ps);
-        ctx.Context.GeometryShader.Set(null);
+        var b_ = _builder ??= _data.Map(_ctx);
+        b_.Add(a, colorA.ToVector4());
+        b_.Add(b, colorB.ToVector4());
+        b_.Add(c, colorC.ToVector4());
     }
 
-    public void Draw(RenderContext ctx, Data data)
+    public void Flush()
     {
-        Bind(ctx);
-        data.DrawAll(ctx);
+        if (_builder == null) return;
+        _builder.Dispose();
+        _builder = null;
+        Bind();
+        _data.DrawAll(_ctx);
+    }
+
+    private void Bind()
+    {
+        _ctx.Context.InputAssembler.PrimitiveTopology = PrimitiveTopology.TriangleList;
+        _ctx.Context.InputAssembler.InputLayout = _il;
+        _ctx.Context.VertexShader.Set(_vs);
+        _ctx.Context.VertexShader.SetConstantBuffer(0, _constantBuffer);
+        _ctx.Context.PixelShader.Set(_ps);
+        _ctx.Context.GeometryShader.Set(null);
     }
 }

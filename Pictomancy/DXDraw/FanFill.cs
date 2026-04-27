@@ -29,7 +29,7 @@ internal class FanFill : IDisposable
         public Vector4 ColorEnd;
     }
 
-    public class Data : IDisposable
+    private class Data : IDisposable
     {
         public class Builder : IDisposable
         {
@@ -81,21 +81,28 @@ internal class FanFill : IDisposable
         }
     }
 
+    private readonly RenderContext _ctx;
+    private readonly Data _data;
+    private Data.Builder? _builder;
     private readonly SharpDX.Direct3D11.Buffer _constantBuffer;
     private readonly InputLayout _il;
     private readonly VertexShader _vs;
     private readonly PixelShader _ps;
-    public FanFill(RenderContext ctx)
+
+    public bool HasPending => _builder != null;
+
+    public FanFill(RenderContext ctx, int maxFans)
     {
+        _ctx = ctx;
+        _data = new(ctx, maxFans, true);
         var shader = """
             #define PI 3.14159265359f
             #define SEGMENTS 360
 
-            struct Constants
+            cbuffer Constants : register(b0)
             {
                 float4x4 viewProj;
             };
-            Constants k : register(c0);
 
             struct Fan
             {
@@ -137,7 +144,7 @@ internal class FanFill : IDisposable
                 float3 offset = radius * float3(cos(angle), 0, sin(angle));
 
                 o.tex.x = angle;
-                o.projPos = mul(float4(instance.origin + offset, 1.0), k.viewProj);
+                o.projPos = mul(float4(instance.origin + offset, 1.0), viewProj);
                 return o;
             }
 
@@ -148,11 +155,11 @@ internal class FanFill : IDisposable
             """;
 
         var vs = ShaderBytecode.Compile(shader, "vs", "vs_5_0");
-        PictoService.Log.Debug($"Circle VS compile: {vs.Message}");
+        PctService.Log.Debug($"Circle VS compile: {vs.Message}");
         _vs = new(ctx.Device, vs.Bytecode);
 
         var ps = ShaderBytecode.Compile(shader, "ps", "ps_5_0");
-        PictoService.Log.Debug($"Circle PS compile: {ps.Message}");
+        PctService.Log.Debug($"Circle PS compile: {ps.Message}");
         _ps = new(ctx.Device, ps.Bytecode);
 
         _constantBuffer = new(ctx.Device, 16 * 4, ResourceUsage.Default, BindFlags.ConstantBuffer, CpuAccessFlags.None, ResourceOptionFlags.None, 0);
@@ -170,31 +177,41 @@ internal class FanFill : IDisposable
 
     public void Dispose()
     {
+        _builder?.Dispose();
+        _data.Dispose();
         _constantBuffer.Dispose();
         _il.Dispose();
         _vs.Dispose();
         _ps.Dispose();
     }
 
-    public void UpdateConstants(RenderContext ctx, Constants consts)
+    public void UpdateConstants(Constants consts)
     {
         consts.ViewProj.Transpose();
-        ctx.Context.UpdateSubresource(ref consts, _constantBuffer);
+        _ctx.Context.UpdateSubresource(ref consts, _constantBuffer);
     }
 
-    public void Bind(RenderContext ctx)
+    public void Add(Vector3 origin, float innerRadius, float outerRadius, float minAngle, float maxAngle, uint colorOrigin, uint colorEnd)
     {
-        ctx.Context.InputAssembler.PrimitiveTopology = PrimitiveTopology.TriangleStrip;
-        ctx.Context.InputAssembler.InputLayout = _il;
-        ctx.Context.VertexShader.Set(_vs);
-        ctx.Context.VertexShader.SetConstantBuffer(0, _constantBuffer);
-        ctx.Context.PixelShader.Set(_ps);
-        ctx.Context.GeometryShader.Set(null);
+        (_builder ??= _data.Map(_ctx)).Add(origin, innerRadius, outerRadius, minAngle, maxAngle, colorOrigin.ToVector4(), colorEnd.ToVector4());
     }
 
-    public void Draw(RenderContext ctx, Data data)
+    public void Flush()
     {
-        Bind(ctx);
-        data.DrawAll(ctx);
+        if (_builder == null) return;
+        _builder.Dispose();
+        _builder = null;
+        Bind();
+        _data.DrawAll(_ctx);
+    }
+
+    private void Bind()
+    {
+        _ctx.Context.InputAssembler.PrimitiveTopology = PrimitiveTopology.TriangleStrip;
+        _ctx.Context.InputAssembler.InputLayout = _il;
+        _ctx.Context.VertexShader.Set(_vs);
+        _ctx.Context.VertexShader.SetConstantBuffer(0, _constantBuffer);
+        _ctx.Context.PixelShader.Set(_ps);
+        _ctx.Context.GeometryShader.Set(null);
     }
 }
