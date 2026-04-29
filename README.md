@@ -53,14 +53,49 @@ using (var drawList = PctService.Draw())
 ```
 
 ### Draw Hints
-#### Depth Bias
-Depth bias is used to occlude your drawings based on scene depth.
+#### PctDxParams
+<img src="ReadmeImages/dxParams.png">
 
-- 0 is strict occlusion.
-- Small values like [0.001, 1] keep things visible on bumpy surfaces.
-- Larger values bias shapes "forward" so they appear through nearby geometry.
-- Infinity disables occlusion entirely.
-<img src="ReadmeImages/depthBias.png">
+`PctDxParams` controls how each shape interacts with scene depth and camera distance.
+Set a default for the whole drawlist via `PctDrawHints.DefaultParams`, or pass an override per draw call.
+
+```c#
+using (var drawList = PctService.Draw(new PctDrawHints
+{
+    DefaultParams = new PctDxParams
+    {
+        OccludedAlpha = 0.3f,
+        OcclusionTolerance = 0.5f,
+        FadeStart = 30f,
+        FadeStop = 60f,
+    }
+}))
+
+// Applies drawlist default params:
+drawList.AddCircleFilled(origin, radius, fillColor);
+
+// Applies override params:
+drawList.AddCircle(origin, radius, outlineColor,
+    p: new PctDxParams { OccludedAlpha = 0f }); // strict occlusion for this shape only
+```
+
+##### OccludedAlpha (0–1, default 1)
+Alpha multiplier for pixels that are behind scene geometry.
+- `0`: invisible behind walls
+- `0.5`: ghost through walls
+- `1`: fully visible through walls
+
+##### OcclusionTolerance (world meters, default 0)
+A pixel is treated as "in front" if it's at most this many meters behind the scene. Useful for ignoring z-fighting on uneven terrain.
+- `0`: strict occlusion; even tiny floor unevenness can occlude a ground-level shape
+- `0.5`: ignore occlusion up to half a meter
+- `Infinity`: ignore occlusion entirely
+
+##### FadeStart / FadeStop (world meters, default Infinity)
+Linear fade based on the pixel's distance from the camera.
+- Pixels closer than `FadeStart` draw at full alpha.
+- Pixels at or beyond `FadeStop` are invisible.
+- Linear fade between. Default `Infinity` disables distance fade.
 
 #### AutoDraw & UI Masking
 UI masking is used to hide the pictomancy overlay behind the native UI.

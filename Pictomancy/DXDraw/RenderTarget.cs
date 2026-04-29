@@ -20,10 +20,10 @@ internal class RenderTarget : IDisposable
     private Texture2D? _backBufferCopy;
     private ShaderResourceView? _backBufferSRV;
 
-    // Local depth-stencil at viewport size, written by DepthResample and used as DSV during shape draws.
-    private readonly Texture2D _localDepth;
-    private readonly DepthStencilView _localDepthDSV;
-    internal DepthStencilView LocalDepthDSV => _localDepthDSV;
+    // Local depth-stencil at viewport size, used as a stencil-only DSV for clip-zone masking.
+    private readonly Texture2D _clipStencil;
+    private readonly DepthStencilView _clipStencilDSV;
+    internal DepthStencilView ClipStencilDSV => _clipStencilDSV;
     internal RenderTargetView BaseRTV => _baseRTV;
 
     private readonly BlendState _defaultBlendState;
@@ -78,14 +78,14 @@ internal class RenderTarget : IDisposable
             CpuAccessFlags = CpuAccessFlags.None,
             OptionFlags = ResourceOptionFlags.None
         };
-        _localDepth = new(ctx.Device, depthDesc);
+        _clipStencil = new(ctx.Device, depthDesc);
         var dsvDesc = new DepthStencilViewDescription
         {
             Format = Format.D24_UNorm_S8_UInt,
             Dimension = DepthStencilViewDimension.Texture2D,
         };
         dsvDesc.Texture2D.MipSlice = 0;
-        _localDepthDSV = new(ctx.Device, _localDepth, dsvDesc);
+        _clipStencilDSV = new(ctx.Device, _clipStencil, dsvDesc);
 
         var blendDescription = BlendStateDescription.Default();
         if (blendMode != AlphaBlendMode.None)
@@ -153,8 +153,8 @@ internal class RenderTarget : IDisposable
         _processedRTV?.Dispose();
         _processedSRV?.Dispose();
 
-        _localDepth.Dispose();
-        _localDepthDSV.Dispose();
+        _clipStencil.Dispose();
+        _clipStencilDSV.Dispose();
 
         _backBufferCopy?.Dispose();
         _backBufferSRV?.Dispose();

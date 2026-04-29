@@ -4,6 +4,7 @@ using SharpDX.Direct3D;
 using SharpDX.Direct3D11;
 using SharpDX.DXGI;
 using System.Runtime.InteropServices;
+using Vector2 = System.Numerics.Vector2;
 using Vector3 = System.Numerics.Vector3;
 using Vector4 = System.Numerics.Vector4;
 
@@ -15,6 +16,7 @@ internal class TriFill : IDisposable
     public struct Constants
     {
         public Matrix ViewProj;
+        public Vector2 PixelToUv;
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -22,6 +24,10 @@ internal class TriFill : IDisposable
     {
         public Vector3 Point;
         public Vector4 Color;
+        public float OccludedAlpha;
+        public float OcclusionTolerance;
+        public float FadeStart;
+        public float FadeStop;
     }
 
     private class Data : IDisposable
@@ -41,11 +47,15 @@ internal class TriFill : IDisposable
             }
 
             public void Add(ref Instance inst) => _points.Add(ref inst);
-            public void Add(Vector3 world, Vector4 color) =>
+            public void Add(Vector3 world, Vector4 color, PctDxParams p) =>
                 _points.Add(new Instance()
                 {
                     Point = world,
-                    Color = color
+                    Color = color,
+                    OccludedAlpha = p.OccludedAlpha,
+                    OcclusionTolerance = p.OcclusionTolerance,
+                    FadeStart = p.FadeStart,
+                    FadeStop = p.FadeStop,
                 });
         }
 
@@ -88,21 +98,24 @@ internal class TriFill : IDisposable
         _ctx = ctx;
         _data = new(ctx, maxVertices, true);
         var shader = """
+            cbuffer Constants : register(b0)
+            {
+                float4x4 viewProj;
+                float2 pixelToUv;
+            };
+            """ + ShapeSharedShader.Mixin + """
             struct Point
             {
                 float3 pos : WORLD;
                 float4 color : COLOR;
+                float4 fadeParams : FADEPARAMS;
             };
 
             struct VSOutput
             {
                 float4 projPos : SV_POSITION;
                 float4 color : COLOR;
-            };
-
-            cbuffer Constants : register(b0)
-            {
-                float4x4 viewProj;
+                float4 fadeParams : FADEPARAMS;
             };
 
             VSOutput vs(Point v)
@@ -110,12 +123,13 @@ internal class TriFill : IDisposable
                 VSOutput vs;
                 vs.projPos = mul(float4(v.pos, 1), viewProj);
                 vs.color = v.color;
+                vs.fadeParams = v.fadeParams;
                 return vs;
             }
 
             float4 ps(VSOutput input) : SV_TARGET
             {
-                return input.color;
+                return applyShared(input.color, input.projPos.xyz, input.fadeParams);
             }
             """;
 
@@ -127,11 +141,12 @@ internal class TriFill : IDisposable
         PctService.Log.Debug($"Point PS compile: {ps.Message}");
         _ps = new(ctx.Device, ps.Bytecode);
 
-        _constantBuffer = new(ctx.Device, 16 * 4, ResourceUsage.Default, BindFlags.ConstantBuffer, CpuAccessFlags.None, ResourceOptionFlags.None, 0);
+        _constantBuffer = new(ctx.Device, 16 * 5, ResourceUsage.Default, BindFlags.ConstantBuffer, CpuAccessFlags.None, ResourceOptionFlags.None, 0);
         _il = new(ctx.Device, vs.Bytecode,
         [
             new InputElement("WORLD", 0, Format.R32G32B32_Float, -1, 0),
             new InputElement("COLOR", 0, Format.R32G32B32A32_Float, -1, 0),
+            new InputElement("FADEPARAMS", 0, Format.R32G32B32A32_Float, -1, 0),
         ]);
     }
 
@@ -151,12 +166,12 @@ internal class TriFill : IDisposable
         _ctx.Context.UpdateSubresource(ref consts, _constantBuffer);
     }
 
-    public void Add(Vector3 a, Vector3 b, Vector3 c, uint colorA, uint colorB, uint colorC)
+    public void Add(Vector3 a, Vector3 b, Vector3 c, uint colorA, uint colorB, uint colorC, PctDxParams p)
     {
         var b_ = _builder ??= _data.Map(_ctx);
-        b_.Add(a, colorA.ToVector4());
-        b_.Add(b, colorB.ToVector4());
-        b_.Add(c, colorC.ToVector4());
+        b_.Add(a, colorA.ToVector4(), p);
+        b_.Add(b, colorB.ToVector4(), p);
+        b_.Add(c, colorC.ToVector4(), p);
     }
 
     public void Flush()
@@ -175,6 +190,7 @@ internal class TriFill : IDisposable
         _ctx.Context.VertexShader.Set(_vs);
         _ctx.Context.VertexShader.SetConstantBuffer(0, _constantBuffer);
         _ctx.Context.PixelShader.Set(_ps);
+        _ctx.Context.PixelShader.SetConstantBuffer(0, _constantBuffer);
         _ctx.Context.GeometryShader.Set(null);
     }
 }

@@ -4,9 +4,9 @@
     "net10.0-windows7.0": {
       "DalamudPackager": {
         "type": "Direct",
-        "requested": "[14.0.1, )",
-        "resolved": "14.0.1",
-        "contentHash": "y0WWyUE6dhpGdolK3iKgwys05/nZaVf4ZPtIjpLhJBZvHxkkiE23zYRo7K7uqAgoK/QvK5cqF6l3VG5AbgC6KA=="
+        "requested": "[15.0.0, )",
+        "resolved": "15.0.0",
+        "contentHash": "411vwC8/X8Z/sQ2TI6v3SvOn66xFPeOjFn3Zn+h0d3Ox2t1kFm66AhDvmx/qcMwVrR+Hidxj0dadpQ2dgyXMBQ=="
       },
       "DotNet.ReproducibleBuilds": {
         "type": "Direct",
@@ -16,8 +16,8 @@
       },
       "KamiToolKit": {
         "type": "Transitive",
-        "resolved": "1.0.2",
-        "contentHash": "8TYLEw/m0WGVsM/qmCyuAzVgqn/HchhYa8DgfW+OIHueWKkK6anFDm8EUP3nNCsFsQ6803MxoPCK0rLoUNP1Aw==",
+        "resolved": "1.1.0",
+        "contentHash": "I/oPFBRZpxqBpXbOm6rTFO44a0u09POng07hm1OP6MzLwAiYVBiGQJNWYWbfIRwjmHgOXyXujUA6ZoEoQHxFZw==",
         "dependencies": {
           "SixLabors.ImageSharp": "3.1.12"
         }
@@ -98,7 +98,7 @@
       "pictomancy": {
         "type": "Project",
         "dependencies": {
-          "KamiToolKit": "[1.0.2, )",
+          "KamiToolKit": "[1.1.0, )",
           "SharpDX.D3DCompiler": "[4.2.0, )",
           "SharpDX.Direct2D1": "[4.2.0, )",
           "SharpDX.Direct3D11": "[4.2.0, )",

@@ -17,8 +17,12 @@ public class PctDrawList : IDisposable
     private PctTexture? _texture;
     internal bool Finalized => _texture != null;
 
-    internal PctDrawList(ImDrawListPtr? drawlist, DXRenderer renderer, SceneDepth sceneDepth)
+    /// <summary>Default rendering params applied to any shape that doesn't pass an explicit override.</summary>
+    public PctDxParams DefaultParams { get; }
+
+    internal PctDrawList(ImDrawListPtr? drawlist, DXRenderer renderer, SceneDepth sceneDepth, PctDxParams? defaultParams = null)
     {
+        DefaultParams = defaultParams ?? new PctDxParams();
         if (drawlist != null)
         {
             _drawList = _textDrawList = (ImDrawListPtr)drawlist;
@@ -162,7 +166,7 @@ public class PctDrawList : IDisposable
         }
     }
 
-    public void PathStroke(uint color, PctStrokeFlags flags = default, float thickness = 2f)
+    public void PathStroke(uint color, PctStrokeFlags flags = default, float thickness = 2f, PctDxParams? p = null)
     {
         if (_renderer.StrokeDegraded)
         {
@@ -170,84 +174,84 @@ public class PctDrawList : IDisposable
         }
         else
         {
-            _renderer.DrawStroke(_path, thickness, color, (flags & PctStrokeFlags.Closed) > 0);
+            _renderer.DrawStroke(_path, thickness, color, (flags & PctStrokeFlags.Closed) > 0, p ?? DefaultParams);
         }
         _path.Clear();
     }
 
-    public void AddTriangleFilled(Vector3 a, Vector3 b, Vector3 c, uint color)
+    public void AddTriangleFilled(Vector3 a, Vector3 b, Vector3 c, uint color, PctDxParams? p = null)
     {
-        AddTriangleFilled(a, b, c, color, color, color);
+        AddTriangleFilled(a, b, c, color, color, color, p);
     }
 
-    public void AddTriangleFilled(Vector3 a, Vector3 b, Vector3 c, uint colorA, uint colorB, uint colorC)
+    public void AddTriangleFilled(Vector3 a, Vector3 b, Vector3 c, uint colorA, uint colorB, uint colorC, PctDxParams? p = null)
     {
-        _renderer.DrawTriangle(a, b, c, colorA, colorB, colorC);
+        _renderer.DrawTriangle(a, b, c, colorA, colorB, colorC, p ?? DefaultParams);
     }
 
-    public void AddLine(Vector3 start, Vector3 stop, float halfWidth, uint color, float thickness = 2)
-    {
-        Vector3 direction = stop - start;
-        Vector3 perpendicular = halfWidth * Vector3.Normalize(Vector3.Cross(direction, Vector3.UnitY));
-        AddQuad(start - perpendicular, stop - perpendicular, stop + perpendicular, start + perpendicular, color, thickness);
-    }
-
-    public void AddLineFilled(Vector3 start, Vector3 stop, float halfWidth, uint color, uint? outerColor = null)
+    public void AddLine(Vector3 start, Vector3 stop, float halfWidth, uint color, float thickness = 2, PctDxParams? p = null)
     {
         Vector3 direction = stop - start;
         Vector3 perpendicular = halfWidth * Vector3.Normalize(Vector3.Cross(direction, Vector3.UnitY));
-        AddQuadFilled(start - perpendicular, stop - perpendicular, stop + perpendicular, start + perpendicular, color, outerColor ?? color, outerColor ?? color, color);
+        AddQuad(start - perpendicular, stop - perpendicular, stop + perpendicular, start + perpendicular, color, thickness, p);
     }
 
-    public void AddQuad(Vector3 a, Vector3 b, Vector3 c, Vector3 d, uint color, float thickness = 2)
+    public void AddLineFilled(Vector3 start, Vector3 stop, float halfWidth, uint color, uint? outerColor = null, PctDxParams? p = null)
+    {
+        Vector3 direction = stop - start;
+        Vector3 perpendicular = halfWidth * Vector3.Normalize(Vector3.Cross(direction, Vector3.UnitY));
+        AddQuadFilled(start - perpendicular, stop - perpendicular, stop + perpendicular, start + perpendicular, color, outerColor ?? color, outerColor ?? color, color, p);
+    }
+
+    public void AddQuad(Vector3 a, Vector3 b, Vector3 c, Vector3 d, uint color, float thickness = 2, PctDxParams? p = null)
     {
         PathLineTo(a);
         PathLineTo(b);
         PathLineTo(c);
         PathLineTo(d);
-        PathStroke(color, PctStrokeFlags.Closed, thickness);
+        PathStroke(color, PctStrokeFlags.Closed, thickness, p);
     }
 
-    public void AddQuadFilled(Vector3 a, Vector3 b, Vector3 c, Vector3 d, uint color)
+    public void AddQuadFilled(Vector3 a, Vector3 b, Vector3 c, Vector3 d, uint color, PctDxParams? p = null)
     {
-        AddQuadFilled(a, b, c, d, color, color, color, color);
+        AddQuadFilled(a, b, c, d, color, color, color, color, p);
     }
 
-    public void AddQuadFilled(Vector3 a, Vector3 b, Vector3 c, Vector3 d, uint colorA, uint colorB, uint colorC, uint colorD)
+    public void AddQuadFilled(Vector3 a, Vector3 b, Vector3 c, Vector3 d, uint colorA, uint colorB, uint colorC, uint colorD, PctDxParams? p = null)
     {
-        AddTriangleFilled(a, b, c, colorA, colorB, colorC);
-        AddTriangleFilled(a, c, d, colorA, colorC, colorD);
+        AddTriangleFilled(a, b, c, colorA, colorB, colorC, p);
+        AddTriangleFilled(a, c, d, colorA, colorC, colorD, p);
     }
 
-    public void AddCircle(Vector3 origin, float radius, uint color, uint numSegments = 0, float thickness = 2)
+    public void AddCircle(Vector3 origin, float radius, uint color, uint numSegments = 0, float thickness = 2, PctDxParams? p = null)
     {
         PathArcTo(origin, radius, 0, 2 * MathF.PI, numSegments);
-        PathStroke(color, PctStrokeFlags.Closed, thickness);
+        PathStroke(color, PctStrokeFlags.Closed, thickness, p);
     }
 
-    public void AddCircleFilled(Vector3 origin, float radius, uint color, uint? outerColor = null, uint numSegments = 0)
+    public void AddCircleFilled(Vector3 origin, float radius, uint color, uint? outerColor = null, uint numSegments = 0, PctDxParams? p = null)
     {
-        AddFanFilled(origin, 0, radius, 0, 2 * MathF.PI, color, outerColor, numSegments);
+        AddFanFilled(origin, 0, radius, 0, 2 * MathF.PI, color, outerColor, numSegments, p);
     }
 
-    public void AddArc(Vector3 origin, float radius, float minAngle, float maxAngle, uint color, uint numSegments = 0, float thickness = 2)
+    public void AddArc(Vector3 origin, float radius, float minAngle, float maxAngle, uint color, uint numSegments = 0, float thickness = 2, PctDxParams? p = null)
     {
         PathArcTo(origin, radius, minAngle, maxAngle, numSegments);
-        PathStroke(color, PctStrokeFlags.None, thickness);
+        PathStroke(color, PctStrokeFlags.None, thickness, p);
     }
 
-    public void AddArcFilled(Vector3 origin, float radius, float minAngle, float maxAngle, uint color, uint? outerColor = null, uint numSegments = 0)
+    public void AddArcFilled(Vector3 origin, float radius, float minAngle, float maxAngle, uint color, uint? outerColor = null, uint numSegments = 0, PctDxParams? p = null)
     {
-        AddFanFilled(origin, 0, radius, minAngle, maxAngle, color, outerColor, numSegments);
+        AddFanFilled(origin, 0, radius, minAngle, maxAngle, color, outerColor, numSegments, p);
     }
 
-    public void AddConeFilled(Vector3 origin, float radius, float rotation, float angle, uint color, uint? outerColor = null, uint numSegments = 0)
+    public void AddConeFilled(Vector3 origin, float radius, float rotation, float angle, uint color, uint? outerColor = null, uint numSegments = 0, PctDxParams? p = null)
     {
         var halfAngle = angle / 2;
-        AddFanFilled(origin, 0, radius, rotation - halfAngle, rotation + halfAngle, color, outerColor, numSegments);
+        AddFanFilled(origin, 0, radius, rotation - halfAngle, rotation + halfAngle, color, outerColor, numSegments, p);
     }
 
-    public void AddFan(Vector3 origin, float innerRadius, float outerRadius, float minAngle, float maxAngle, uint color, uint numSegments = 0, float thickness = 2)
+    public void AddFan(Vector3 origin, float innerRadius, float outerRadius, float minAngle, float maxAngle, uint color, uint numSegments = 0, float thickness = 2, PctDxParams? p = null)
     {
         bool isCircle = maxAngle - minAngle >= 2 * MathF.PI - 0.000001;
         PathArcTo(origin, outerRadius, minAngle, maxAngle, numSegments);
@@ -255,7 +259,7 @@ public class PctDrawList : IDisposable
         {
             if (isCircle)
             {
-                PathStroke(color, PctStrokeFlags.Closed, thickness);
+                PathStroke(color, PctStrokeFlags.Closed, thickness, p);
             }
             PathArcTo(origin, innerRadius, maxAngle, minAngle, numSegments);
         }
@@ -263,11 +267,11 @@ public class PctDrawList : IDisposable
         {
             PathLineTo(origin);
         }
-        PathStroke(color, PctStrokeFlags.Closed, thickness);
+        PathStroke(color, PctStrokeFlags.Closed, thickness, p);
     }
 
-    public void AddFanFilled(Vector3 origin, float innerRadius, float outerRadius, float minAngle, float maxAngle, uint color, uint? outerColor = null, uint numSegments = 0)
+    public void AddFanFilled(Vector3 origin, float innerRadius, float outerRadius, float minAngle, float maxAngle, uint color, uint? outerColor = null, uint numSegments = 0, PctDxParams? p = null)
     {
-        _renderer.DrawFan(origin, innerRadius, outerRadius, minAngle, maxAngle, color, outerColor ?? color, numSegments);
+        _renderer.DrawFan(origin, innerRadius, outerRadius, minAngle, maxAngle, color, outerColor ?? color, numSegments, p ?? DefaultParams);
     }
 }

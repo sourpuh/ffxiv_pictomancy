@@ -3,7 +3,7 @@ namespace Pictomancy;
 /// <summary>
 /// Hints for Pictomancy drawing. Use object-initializer syntax to set just what you need:
 /// <code>
-/// var hints = new PctDrawHints { AutoDraw = AutoDraw.NativeOverlay, DepthBias = 0.005f };
+/// var hints = new PctDrawHints { AutoDraw = AutoDraw.NativeOverlay, DefaultParams = new() { OccludedAlpha = 0.3f } };
 /// </code>
 /// These are called "hints" instead of "settings" because they may not always be respected.
 /// </summary>
@@ -29,17 +29,15 @@ public record struct PctDrawHints
     public AlphaBlendMode AlphaBlendMode { get; init; } = AlphaBlendMode.Add;
 
     /// <summary>
-    /// World-space bias added to the scene depth before occlusion testing.
-    /// 0 is strict occlusion. Small values like [0.001, 0.1] keep things visible on non-planar surfaces.
-    /// Larger values bias shapes "forward" so they appear through nearby geometry.
-    /// Infinity disables occlusion entirely.
-    /// </summary>
-    public float DepthBias { get; init; } = float.PositiveInfinity;
-
-    /// <summary>
     /// How to mask pictomancy output with the game's UI. Check UIMask file for descriptions.
     /// </summary>
     public UIMask UIMask { get; init; } = UIMask.BackbufferAlpha;
+
+    /// <summary>
+    /// Default per-shape rendering params (occlusion fade, distance fade) applied to any shape
+    /// that doesn't pass an explicit override on its draw call.
+    /// </summary>
+    public PctDxParams DefaultParams { get; init; } = new PctDxParams();
 
     public float MaxAlphaFraction => MaxAlpha / 255f;
 

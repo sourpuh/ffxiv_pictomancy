@@ -46,8 +46,11 @@ public sealed class DemoWindow : Window, IDisposable
     private bool _drawWhenFaded;
     private int _maxAlpha = 255;
     private int _blendMode = (int)AlphaBlendMode.Add;
-    private float _depthBias = 0f;
     private int _uiMask = (int)UIMask.BackbufferAlpha;
+    private float _occludedAlpha = 0f;
+    private float _occlusionTolerance = 0f;
+    private float _fadeStart = float.PositiveInfinity;
+    private float _fadeStop = float.PositiveInfinity;
 
     public DemoWindow()
         : base("Pictomancy Demo", ImGuiWindowFlags.AlwaysAutoResize)
@@ -80,9 +83,13 @@ public sealed class DemoWindow : Window, IDisposable
             ImGui.SliderInt("Max alpha", ref _maxAlpha, 0, 255);
             string[] modes = Enum.GetNames(typeof(AlphaBlendMode));
             ImGui.Combo("Blend mode", ref _blendMode, modes, modes.Length);
-            ImGui.SliderFloat("Depth bias (m)", ref _depthBias, 0f, 100f, "%.3f", ImGuiSliderFlags.Logarithmic);
             string[] uiMaskNames = Enum.GetNames(typeof(UIMask));
             ImGui.Combo("UI mask", ref _uiMask, uiMaskNames, uiMaskNames.Length);
+
+            ImGui.SliderFloat("Occluded alpha", ref _occludedAlpha, 0f, 1f);
+            ImGui.SliderFloat("Occlusion tolerance (m)", ref _occlusionTolerance, 0f, 5f);
+            ImGui.SliderFloat("Fade start (m)", ref _fadeStart, 0f, 200f);
+            ImGui.SliderFloat("Fade stop (m)", ref _fadeStop, 0f, 200f);
         }
 
         if (ImGui.CollapsingHeader("Shapes", ImGuiTreeNodeFlags.DefaultOpen))
@@ -134,8 +141,14 @@ public sealed class DemoWindow : Window, IDisposable
             AutoDraw = (AutoDraw)_autoDraw,
             MaxAlpha = (byte)_maxAlpha,
             AlphaBlendMode = (AlphaBlendMode)_blendMode,
-            DepthBias = _depthBias,
             UIMask = (UIMask)_uiMask,
+            DefaultParams = new PctDxParams
+            {
+                OccludedAlpha = _occludedAlpha,
+                OcclusionTolerance = _occlusionTolerance,
+                FadeStart = _fadeStart,
+                FadeStop = _fadeStop,
+            },
         };
 
         using var draw = PctService.Draw(hints: hints);

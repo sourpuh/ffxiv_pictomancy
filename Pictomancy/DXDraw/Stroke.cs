@@ -19,6 +19,7 @@ internal class Stroke : IDisposable
     {
         public Matrix ViewProj;
         public Vector2 RenderTargetSize;
+        public Vector2 PixelToUv;
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -28,6 +29,10 @@ internal class Stroke : IDisposable
         public float Thickness;
         public Vector4 Color;
         public ushort Index;
+        public float OccludedAlpha;
+        public float OcclusionTolerance;
+        public float FadeStart;
+        public float FadeStop;
     }
 
     private class Data : IDisposable
@@ -47,7 +52,7 @@ internal class Stroke : IDisposable
             }
 
             public void Add(ref Instance inst) => _lines.Add(ref inst);
-            public void Add(Vector3[] world, float thickness, Vector4 color, bool closed)
+            public void Add(Vector3[] world, float thickness, Vector4 color, bool closed, PctDxParams p)
             {
                 for (int i = 0; i < world.Length; i++)
                 {
@@ -56,7 +61,11 @@ internal class Stroke : IDisposable
                         World = world[i],
                         Thickness = thickness,
                         Color = color,
-                        Index = (ushort)(i + 1)
+                        Index = (ushort)(i + 1),
+                        OccludedAlpha = p.OccludedAlpha,
+                        OcclusionTolerance = p.OcclusionTolerance,
+                        FadeStart = p.FadeStart,
+                        FadeStop = p.FadeStop,
                     });
                 }
                 if (closed)
@@ -66,7 +75,11 @@ internal class Stroke : IDisposable
                         World = world[0],
                         Thickness = thickness,
                         Color = color,
-                        Index = (ushort)world.Length
+                        Index = (ushort)world.Length,
+                        OccludedAlpha = p.OccludedAlpha,
+                        OcclusionTolerance = p.OcclusionTolerance,
+                        FadeStart = p.FadeStart,
+                        FadeStop = p.FadeStop,
                     });
                 }
             }
@@ -113,12 +126,14 @@ internal class Stroke : IDisposable
         _data = new(ctx, maxSegments, true);
         var shader = """
             #define FEATHER 2
-            
+
             cbuffer Constants : register(b0)
             {
                 float4x4 viewProj;
                 float2 renderTargetSize;
+                float2 pixelToUv;
             };
+            """ + ShapeSharedShader.Mixin + """
 
             struct Line
             {
@@ -126,6 +141,7 @@ internal class Stroke : IDisposable
                 float thickness : THICKNESS;
                 float4 color : COLOR;
                 min16uint index : INDEX;
+                float4 fadeParams : FADEPARAMS;
             };
 
             struct VSOutput
@@ -134,6 +150,7 @@ internal class Stroke : IDisposable
                 float thickness : THICKNESS;
                 float4 color : COLOR;
                 min16uint index : INDEX;
+                float4 fadeParams : FADEPARAMS;
             };
 
             struct GSOutput
@@ -142,6 +159,7 @@ internal class Stroke : IDisposable
                 float4 color : COLOR;
                 noperspective float normal : NORMAL;
                 float thickness : THICKNESS;
+                float4 fadeParams : FADEPARAMS;
             };
 
             VSOutput vs(in Line l)
@@ -151,6 +169,7 @@ internal class Stroke : IDisposable
                 v.thickness = l.thickness + FEATHER / 2;
                 v.color = l.color;
                 v.index = l.index;
+                v.fadeParams = l.fadeParams;
 
                 v.projPos = mul(float4(l.world, 1), viewProj);
                 return v;
@@ -217,6 +236,7 @@ internal class Stroke : IDisposable
                 GSOutput v;
                 v.thickness = start.thickness;
                 v.color = start.color;
+                v.fadeParams = start.fadeParams;
                 v.normal = 1;
                 v.projPos = w0 * (p0 + start_normal);
                 output.Append(v);
@@ -226,6 +246,7 @@ internal class Stroke : IDisposable
 
                 v.thickness = stop.thickness;
                 v.color = stop.color;
+                v.fadeParams = stop.fadeParams;
                 v.normal = 1;
                 v.projPos = w1 * (p1 + stop_normal);
                 output.Append(v);
@@ -248,7 +269,7 @@ internal class Stroke : IDisposable
                 float f = unfeather(input.thickness, input.normal);
                 float4 color = input.color;
                 color.a *= exp2(-2.7 * f * f);
-                return color;
+                return applyShared(color, input.projPos.xyz, input.fadeParams);
             }
             """;
 
@@ -272,7 +293,7 @@ internal class Stroke : IDisposable
             new InputElement("THICKNESS", 0, Format.R32_Float, -1, 0),
             new InputElement("COLOR", 0, Format.R32G32B32A32_Float, -1, 0),
             new InputElement("INDEX", 0, Format.R16_UInt, -1, 0),
-            new InputElement("NORMAL", 0, Format.R32_Float, -1, 0),
+            new InputElement("FADEPARAMS", 0, Format.R32G32B32A32_Float, -1, 0),
         ]);
     }
 
@@ -293,9 +314,9 @@ internal class Stroke : IDisposable
         _ctx.Context.UpdateSubresource(ref consts, _constantBuffer);
     }
 
-    public void Add(Vector3[] world, float thickness, uint color, bool closed)
+    public void Add(Vector3[] world, float thickness, uint color, bool closed, PctDxParams p)
     {
-        (_builder ??= _data.Map(_ctx)).Add(world, thickness, color.ToVector4(), closed);
+        (_builder ??= _data.Map(_ctx)).Add(world, thickness, color.ToVector4(), closed, p);
     }
 
     public void Flush()
@@ -316,6 +337,7 @@ internal class Stroke : IDisposable
         _ctx.Context.GeometryShader.Set(_gs);
         _ctx.Context.GeometryShader.SetConstantBuffer(0, _constantBuffer);
         _ctx.Context.PixelShader.Set(_ps);
+        _ctx.Context.PixelShader.SetConstantBuffer(0, _constantBuffer);
     }
 
 }

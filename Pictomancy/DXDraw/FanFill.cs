@@ -4,6 +4,7 @@ using SharpDX.Direct3D;
 using SharpDX.Direct3D11;
 using SharpDX.DXGI;
 using System.Runtime.InteropServices;
+using Vector2 = System.Numerics.Vector2;
 using Vector3 = System.Numerics.Vector3;
 using Vector4 = System.Numerics.Vector4;
 
@@ -15,6 +16,7 @@ internal class FanFill : IDisposable
     public struct Constants
     {
         public Matrix ViewProj;
+        public Vector2 PixelToUv;
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -27,6 +29,10 @@ internal class FanFill : IDisposable
         public float MaxAngle;
         public Vector4 ColorOrigin;
         public Vector4 ColorEnd;
+        public float OccludedAlpha;
+        public float OcclusionTolerance;
+        public float FadeStart;
+        public float FadeStop;
     }
 
     private class Data : IDisposable
@@ -46,7 +52,7 @@ internal class FanFill : IDisposable
             }
 
             public void Add(ref Instance inst) => _circles.Add(ref inst);
-            public void Add(Vector3 world, float innerRadius, float outerRadius, float minAngle, float maxAngle, Vector4 colorOrigin, Vector4 colorEnd) =>
+            public void Add(Vector3 world, float innerRadius, float outerRadius, float minAngle, float maxAngle, Vector4 colorOrigin, Vector4 colorEnd, PctDxParams p) =>
                 _circles.Add(new Instance()
                 {
                     Origin = world,
@@ -55,7 +61,11 @@ internal class FanFill : IDisposable
                     MinAngle = minAngle,
                     MaxAngle = maxAngle,
                     ColorOrigin = colorOrigin,
-                    ColorEnd = colorEnd
+                    ColorEnd = colorEnd,
+                    OccludedAlpha = p.OccludedAlpha,
+                    OcclusionTolerance = p.OcclusionTolerance,
+                    FadeStart = p.FadeStart,
+                    FadeStop = p.FadeStop,
                 });
         }
 
@@ -102,7 +112,9 @@ internal class FanFill : IDisposable
             cbuffer Constants : register(b0)
             {
                 float4x4 viewProj;
+                float2 pixelToUv;
             };
+            """ + ShapeSharedShader.Mixin + """
 
             struct Fan
             {
@@ -113,6 +125,7 @@ internal class FanFill : IDisposable
                 float maxAngle : ANGLE1;
                 float4 colorOrigin : INSTANCECOLOR0;
                 float4 colorEnd : INSTANCECOLOR1;
+                float4 fadeParams : FADEPARAMS;
             };
 
             struct VSOutput
@@ -120,6 +133,7 @@ internal class FanFill : IDisposable
                 float4 projPos : SV_POSITION;
                 float4 color : COLOR;
                 float2 tex : TEXCOORD;
+                float4 fadeParams : FADEPARAMS;
             };
 
             VSOutput vs(in Fan instance, uint vertexId: SV_VERTEXID, uint instanceId: SV_INSTANCEID)
@@ -145,12 +159,13 @@ internal class FanFill : IDisposable
 
                 o.tex.x = angle;
                 o.projPos = mul(float4(instance.origin + offset, 1.0), viewProj);
+                o.fadeParams = instance.fadeParams;
                 return o;
             }
 
             float4 ps(VSOutput input) : SV_TARGET
             {
-                return input.color;
+                return applyShared(input.color, input.projPos.xyz, input.fadeParams);
             }
             """;
 
@@ -162,7 +177,7 @@ internal class FanFill : IDisposable
         PctService.Log.Debug($"Circle PS compile: {ps.Message}");
         _ps = new(ctx.Device, ps.Bytecode);
 
-        _constantBuffer = new(ctx.Device, 16 * 4, ResourceUsage.Default, BindFlags.ConstantBuffer, CpuAccessFlags.None, ResourceOptionFlags.None, 0);
+        _constantBuffer = new(ctx.Device, 16 * 5, ResourceUsage.Default, BindFlags.ConstantBuffer, CpuAccessFlags.None, ResourceOptionFlags.None, 0);
         _il = new(ctx.Device, vs.Bytecode,
         [
             new InputElement("WORLD", 0, Format.R32G32B32_Float, -1, 0, InputClassification.PerInstanceData, 1),
@@ -172,6 +187,7 @@ internal class FanFill : IDisposable
             new InputElement("ANGLE", 1, Format.R32_Float, -1, 0, InputClassification.PerInstanceData, 1),
             new InputElement("INSTANCECOLOR", 0, Format.R32G32B32A32_Float, -1, 0, InputClassification.PerInstanceData, 1),
             new InputElement("INSTANCECOLOR", 1, Format.R32G32B32A32_Float, -1, 0, InputClassification.PerInstanceData, 1),
+            new InputElement("FADEPARAMS", 0, Format.R32G32B32A32_Float, -1, 0, InputClassification.PerInstanceData, 1),
         ]);
     }
 
@@ -191,9 +207,9 @@ internal class FanFill : IDisposable
         _ctx.Context.UpdateSubresource(ref consts, _constantBuffer);
     }
 
-    public void Add(Vector3 origin, float innerRadius, float outerRadius, float minAngle, float maxAngle, uint colorOrigin, uint colorEnd)
+    public void Add(Vector3 origin, float innerRadius, float outerRadius, float minAngle, float maxAngle, uint colorOrigin, uint colorEnd, PctDxParams p)
     {
-        (_builder ??= _data.Map(_ctx)).Add(origin, innerRadius, outerRadius, minAngle, maxAngle, colorOrigin.ToVector4(), colorEnd.ToVector4());
+        (_builder ??= _data.Map(_ctx)).Add(origin, innerRadius, outerRadius, minAngle, maxAngle, colorOrigin.ToVector4(), colorEnd.ToVector4(), p);
     }
 
     public void Flush()
@@ -212,6 +228,7 @@ internal class FanFill : IDisposable
         _ctx.Context.VertexShader.Set(_vs);
         _ctx.Context.VertexShader.SetConstantBuffer(0, _constantBuffer);
         _ctx.Context.PixelShader.Set(_ps);
+        _ctx.Context.PixelShader.SetConstantBuffer(0, _constantBuffer);
         _ctx.Context.GeometryShader.Set(null);
     }
 }

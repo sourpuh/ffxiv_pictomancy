@@ -13,10 +13,8 @@ internal class DXRenderer : IDisposable
     public FanFill? FanFill { get; init; }
     public Stroke? Stroke { get; init; }
     public FullScreenPass FSP { get; init; }
-    public DepthResample DepthResample { get; init; }
     public ClipZone ClipZone { get; init; }
 
-    private readonly DepthStencilState _resampleDSS;
     private readonly DepthStencilState _clipZoneDSS;
     private readonly DepthStencilState _shapeDSS;
 
@@ -54,15 +52,7 @@ internal class DXRenderer : IDisposable
         TriFill = new(RenderContext, options.MaxTriangleVertices + (FanDegraded ? options.MaxFans * 360 : 0));
 
         FSP = new(RenderContext);
-        DepthResample = new(RenderContext);
         ClipZone = new(RenderContext, options.MaxClipZones);
-
-        var resampleDesc = DepthStencilStateDescription.Default();
-        resampleDesc.IsDepthEnabled = true;
-        resampleDesc.DepthWriteMask = DepthWriteMask.All;
-        resampleDesc.DepthComparison = Comparison.Always;
-        resampleDesc.IsStencilEnabled = false;
-        _resampleDSS = new(RenderContext.Device, resampleDesc);
 
         var clipZoneDesc = DepthStencilStateDescription.Default();
         clipZoneDesc.IsDepthEnabled = false;
@@ -80,10 +70,10 @@ internal class DXRenderer : IDisposable
         clipZoneDesc.BackFace = clipZoneDesc.FrontFace;
         _clipZoneDSS = new(RenderContext.Device, clipZoneDesc);
 
+        // Shape pass: no depth test (PS handles occlusion), stencil-equal-zero to skip clip zones.
         var shapeDesc = DepthStencilStateDescription.Default();
-        shapeDesc.IsDepthEnabled = true;
+        shapeDesc.IsDepthEnabled = false;
         shapeDesc.DepthWriteMask = DepthWriteMask.Zero;
-        shapeDesc.DepthComparison = Comparison.GreaterEqual;
         shapeDesc.IsStencilEnabled = true;
         shapeDesc.StencilReadMask = 0xFF;
         shapeDesc.StencilWriteMask = 0;
@@ -106,8 +96,6 @@ internal class DXRenderer : IDisposable
         Stroke?.Dispose();
         ClipZone.Dispose();
         FSP.Dispose();
-        DepthResample.Dispose();
-        _resampleDSS.Dispose();
         _clipZoneDSS.Dispose();
         _shapeDSS.Dispose();
         RenderContext.Dispose();
@@ -146,39 +134,42 @@ internal class DXRenderer : IDisposable
 
     internal unsafe RenderTarget EndFrame(ShaderResourceView? sceneDepthSRV, SharpDX.Vector2 sceneDepthUvScale)
     {
-        TriFill.UpdateConstants(new() { ViewProj = ViewProj });
-        FanFill?.UpdateConstants(new() { ViewProj = ViewProj });
-        Stroke?.UpdateConstants(new() { ViewProj = ViewProj, RenderTargetSize = new Vector2(ViewportSize.X, ViewportSize.Y) });
+        var rtSize = new Vector2(ViewportSize.X, ViewportSize.Y);
+        var pixelToUv = new Vector2(sceneDepthUvScale.X, sceneDepthUvScale.Y) / rtSize;
+        TriFill.UpdateConstants(new() { ViewProj = ViewProj, PixelToUv = pixelToUv });
+        FanFill?.UpdateConstants(new() { ViewProj = ViewProj, PixelToUv = pixelToUv });
+        Stroke?.UpdateConstants(new() { ViewProj = ViewProj, RenderTargetSize = rtSize, PixelToUv = pixelToUv });
 
         bool hasShapes = TriFill.HasPending || FanFill?.HasPending == true || Stroke?.HasPending == true;
         bool hasClipZones = ClipZone.HasPending;
 
-        if (hasShapes && sceneDepthSRV != null)
+        if ((hasShapes || hasClipZones) && sceneDepthSRV != null)
         {
-            // Resample scene depth into our viewport-sized DSV.
-            RenderContext.Context.OutputMerger.SetTargets(RenderTarget!.LocalDepthDSV);
-            RenderContext.Context.ClearDepthStencilView(RenderTarget.LocalDepthDSV, DepthStencilClearFlags.Depth | DepthStencilClearFlags.Stencil, 0f, 0);
-            RenderContext.Context.OutputMerger.SetDepthStencilState(_resampleDSS);
-            float near = ViewProj.M43;
-            float viewProjBias = near > 0f ? PctService.Hints.DepthBias / near : 0f;
-            DepthResample.Draw(RenderContext, sceneDepthSRV, sceneDepthUvScale, viewProjBias);
+            // DSV-only target with cleared stencil for the clip-zone pass.
+            RenderContext.Context.OutputMerger.SetTargets(RenderTarget!.ClipStencilDSV);
+            RenderContext.Context.ClearDepthStencilView(RenderTarget.ClipStencilDSV, DepthStencilClearFlags.Stencil, 0f, 0);
 
             if (hasClipZones)
             {
-                // Stamp stencil = 1 inside each clip rect.
-                ClipZone.UpdateConstants(new() { ViewportSize = new Vector2(ViewportSize.X, ViewportSize.Y) });
+                ClipZone.UpdateConstants(new() { ViewportSize = rtSize });
                 RenderContext.Context.OutputMerger.SetDepthStencilState(_clipZoneDSS, 1);
                 ClipZone.Flush();
             }
 
-            // Bind RTV+DSV with read-only depth-test for shape draws.
-            RenderContext.Context.OutputMerger.SetTargets(RenderTarget.LocalDepthDSV, RenderTarget.BaseRTV);
+            // Bind RTV+DSV; shape pass uses stencil-equal-zero, no depth test.
+            RenderContext.Context.OutputMerger.SetTargets(RenderTarget.ClipStencilDSV, RenderTarget.BaseRTV);
             RenderContext.Context.OutputMerger.SetDepthStencilState(_shapeDSS, 0);
+
+            // Bind scene depth so shape PSes can sample it.
+            RenderContext.Context.PixelShader.SetShaderResource(0, sceneDepthSRV);
         }
 
         TriFill.Flush();
         FanFill?.Flush();
         Stroke?.Flush();
+
+        // Unbind scene depth for FSP.
+        RenderContext.Context.PixelShader.SetShaderResource(0, null);
 
         var device = Device.Instance();
         if (device != null &&
@@ -204,12 +195,12 @@ internal class DXRenderer : IDisposable
         //RenderContext.Context2.DrawText(text, position);
         //RenderContext.Context2.EndDraw();
     }
-    public void DrawTriangle(Vector3 a, Vector3 b, Vector3 c, uint colorA, uint colorB, uint colorC)
-        => TriFill.Add(a, b, c, colorA, colorB, colorC);
+    public void DrawTriangle(Vector3 a, Vector3 b, Vector3 c, uint colorA, uint colorB, uint colorC, PctDxParams p)
+        => TriFill.Add(a, b, c, colorA, colorB, colorC, p);
 
     public void AddClipZone(Vector2 min, Vector2 max) => ClipZone.Add(min, max);
 
-    private void DrawTriangleFan(Vector3 center, float innerRadius, float outerRadius, float minAngle, float maxAngle, uint innerColor, uint outerColor, uint numSegments = 0)
+    private void DrawTriangleFan(Vector3 center, float innerRadius, float outerRadius, float minAngle, float maxAngle, uint innerColor, uint outerColor, uint numSegments, PctDxParams p)
     {
         float totalAngle = maxAngle - minAngle;
         if (numSegments == 0) numSegments = (uint)(MathF.Abs(totalAngle) * 8);
@@ -226,32 +217,32 @@ internal class DXRenderer : IDisposable
             {
                 if (innerRadius > 0)
                 {
-                    DrawTriangle(center + innerRadius * prev, center + outerRadius * prev, center + outerRadius * offset, innerColor, outerColor, outerColor);
-                    DrawTriangle(center + outerRadius * offset, center + innerRadius * offset, center + innerRadius * prev, outerColor, innerColor, innerColor);
+                    DrawTriangle(center + innerRadius * prev, center + outerRadius * prev, center + outerRadius * offset, innerColor, outerColor, outerColor, p);
+                    DrawTriangle(center + outerRadius * offset, center + innerRadius * offset, center + innerRadius * prev, outerColor, innerColor, innerColor, p);
                 }
                 else
                 {
-                    DrawTriangle(center, center + outerRadius * prev, center + outerRadius * offset, innerColor, outerColor, outerColor);
+                    DrawTriangle(center, center + outerRadius * prev, center + outerRadius * offset, innerColor, outerColor, outerColor, p);
                 }
             }
             prev = offset;
         }
     }
-    public void DrawFan(Vector3 center, float innerRadius, float outerRadius, float minAngle, float maxAngle, uint innerColor, uint outerColor, uint numSegments = 0)
+    public void DrawFan(Vector3 center, float innerRadius, float outerRadius, float minAngle, float maxAngle, uint innerColor, uint outerColor, uint numSegments, PctDxParams p)
     {
         if (!FanDegraded && numSegments == 0)
         {
-            FanFill.Add(center, innerRadius, outerRadius, minAngle, maxAngle, innerColor, outerColor);
+            FanFill!.Add(center, innerRadius, outerRadius, minAngle, maxAngle, innerColor, outerColor, p);
         }
         else
         {
-            DrawTriangleFan(center, innerRadius, outerRadius, minAngle, maxAngle, innerColor, outerColor, numSegments);
+            DrawTriangleFan(center, innerRadius, outerRadius, minAngle, maxAngle, innerColor, outerColor, numSegments, p);
         }
     }
 
-    public void DrawStroke(IEnumerable<Vector3> world, float thickness, uint color, bool closed = false)
+    public void DrawStroke(IEnumerable<Vector3> world, float thickness, uint color, bool closed, PctDxParams p)
     {
-        Stroke?.Add(world.ToArray(), thickness, color, closed);
+        Stroke?.Add(world.ToArray(), thickness, color, closed, p);
     }
 
     private static unsafe SharpDX.Matrix ReadMatrix(IntPtr address)

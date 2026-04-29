@@ -143,7 +143,8 @@ public class PctService
         return DrawList = new PctDrawList(
             imguidrawlist,
             _dxRenderer,
-            _sceneDepth
+            _sceneDepth,
+            Hints.DefaultParams
         );
     }
 

@@ -10,9 +10,9 @@
       },
       "KamiToolKit": {
         "type": "Direct",
-        "requested": "[1.0.2, )",
-        "resolved": "1.0.2",
-        "contentHash": "8TYLEw/m0WGVsM/qmCyuAzVgqn/HchhYa8DgfW+OIHueWKkK6anFDm8EUP3nNCsFsQ6803MxoPCK0rLoUNP1Aw==",
+        "requested": "[1.1.0, )",
+        "resolved": "1.1.0",
+        "contentHash": "I/oPFBRZpxqBpXbOm6rTFO44a0u09POng07hm1OP6MzLwAiYVBiGQJNWYWbfIRwjmHgOXyXujUA6ZoEoQHxFZw==",
         "dependencies": {
           "SixLabors.ImageSharp": "3.1.12"
         }
