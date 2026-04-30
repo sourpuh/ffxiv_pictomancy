@@ -16,8 +16,8 @@
       },
       "KamiToolKit": {
         "type": "Transitive",
-        "resolved": "1.1.0",
-        "contentHash": "I/oPFBRZpxqBpXbOm6rTFO44a0u09POng07hm1OP6MzLwAiYVBiGQJNWYWbfIRwjmHgOXyXujUA6ZoEoQHxFZw==",
+        "resolved": "1.1.2",
+        "contentHash": "pyydp+XFd+E00uEXXd44GGNCCH2uAK1ndwjLVHKVrHg059g65ry+92a5UdDISWZRJMhK+LcDpDUPSijnFavCvQ==",
         "dependencies": {
           "SixLabors.ImageSharp": "3.1.12"
         }
@@ -98,7 +98,7 @@
       "pictomancy": {
         "type": "Project",
         "dependencies": {
-          "KamiToolKit": "[1.1.0, )",
+          "KamiToolKit": "[1.1.2, )",
           "SharpDX.D3DCompiler": "[4.2.0, )",
           "SharpDX.Direct2D1": "[4.2.0, )",
           "SharpDX.Direct3D11": "[4.2.0, )",

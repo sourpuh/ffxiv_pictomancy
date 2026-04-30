@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Dalamud.NET.Sdk/15.0.0">
   <PropertyGroup>
     <Authors>sourpuh</Authors>
-    <Version>1.0.0</Version>
+    <Version>1.0.1</Version>
     <Description>A library for drawing 3D overlays in Dalamud plugins</Description>
     <PackageProjectUrl>https://github.com/sourpuh/ffxiv_pictomancy</PackageProjectUrl>
     <Platforms>x64</Platforms>
@@ -37,6 +37,6 @@
     <PackageReference Include="SharpDX.D3DCompiler" Version="4.2.0" />
     <PackageReference Include="SharpDX.Direct3D11" Version="4.2.0" />
     <PackageReference Include="SharpDX.Direct2D1" Version="4.2.0" />
-    <PackageReference Include="KamiToolKit" Version="1.1.0" />
+    <PackageReference Include="KamiToolKit" Version="1.1.2" />
   </ItemGroup>
 </Project>

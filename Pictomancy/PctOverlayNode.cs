@@ -1,6 +1,5 @@
 ﻿using FFXIVClientStructs.FFXIV.Client.Graphics.Kernel;
 using KamiToolKit.Enums;
-using KamiToolKit.Nodes;
 using KamiToolKit.Overlay.UiOverlay;
 using SharpDX.Direct3D11;
 

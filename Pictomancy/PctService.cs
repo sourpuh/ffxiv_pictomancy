@@ -85,8 +85,6 @@ public class PctService
         if (!_initialized) return;
         _initialized = false;
 
-        _overlayNode?.Dispose();
-        _overlayNode = null;
         _overlayController?.Dispose();
         _overlayController = null;
         if (_kamiInitialized)
