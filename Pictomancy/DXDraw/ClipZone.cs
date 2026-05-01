@@ -100,7 +100,7 @@ internal class ClipZone : IDisposable
             VSOutput vs(in Rect r, uint vid : SV_VertexID)
             {
                 VSOutput o;
-                // 0:(min,min) 1:(max,min) 2:(min,max) 3:(max,max) — TriangleStrip order.
+                // 0:(min,min) 1:(max,min) 2:(min,max) 3:(max,max) - TriangleStrip order.
                 float2 px = float2(
                     (vid & 1) ? r.rmax.x : r.rmin.x,
                     (vid & 2) ? r.rmax.y : r.rmin.y);

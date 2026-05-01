@@ -79,7 +79,7 @@ drawList.AddCircle(origin, radius, outlineColor,
     p: new PctDxParams { OccludedAlpha = 0f }); // strict occlusion for this shape only
 ```
 
-##### OccludedAlpha (0–1, default 1)
+##### OccludedAlpha (0 to 1, default 1)
 Alpha multiplier for pixels that are behind scene geometry.
 - `0`: invisible behind walls
 - `0.5`: ghost through walls
