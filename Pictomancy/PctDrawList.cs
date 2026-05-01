@@ -1,4 +1,5 @@
 using Dalamud.Interface.Utility;
+using KamiToolKit.Overlay.UiOverlay;
 using Pictomancy.DXDraw;
 using Pictomancy.ImGuiDraw;
 using System.Drawing;
@@ -12,6 +13,7 @@ public class PctDrawList : IDisposable
     internal readonly List<Vector3> _path;
     internal readonly DXRenderer _renderer;
     internal readonly SceneDepth _sceneDepth;
+    internal readonly PctOverlayNode? _overlayNode;
     internal readonly ImGuiRenderer _fallbackRenderer;
     internal readonly bool isMyWindow;
     private PctTexture? _texture;
@@ -20,7 +22,7 @@ public class PctDrawList : IDisposable
     /// <summary>Default rendering params applied to any shape that doesn't pass an explicit override.</summary>
     public PctDxParams DefaultParams { get; }
 
-    internal PctDrawList(ImDrawListPtr? drawlist, DXRenderer renderer, SceneDepth sceneDepth, PctDxParams? defaultParams = null)
+    internal PctDrawList(ImDrawListPtr? drawlist, DXRenderer renderer, SceneDepth sceneDepth, PctOverlayNode? overlayNode = null, PctDxParams? defaultParams = null)
     {
         DefaultParams = defaultParams ?? new PctDxParams();
         if (drawlist != null)
@@ -49,6 +51,7 @@ public class PctDrawList : IDisposable
         _path = new();
         _renderer = renderer;
         _sceneDepth = sceneDepth;
+        _overlayNode = overlayNode;
         _texture = null;
         _renderer.BeginFrame();
         _sceneDepth.Update();
@@ -73,8 +76,12 @@ public class PctDrawList : IDisposable
         switch (PctService.Hints.AutoDraw)
         {
             case AutoDraw.NativeOverlay:
-                PctService.OverlayNode.IsVisible = true;
-                PctService.OverlayNode.UpdateTexture(_renderer.RenderTarget?.ProcessedTexture, _renderer.RenderTarget?.ProcessedSRV);
+                if (_overlayNode == null)
+                {
+                    goto case AutoDraw.ImGuiOverlay;
+                }
+                _overlayNode.IsVisible = true;
+                _overlayNode.UpdateTexture(_renderer.RenderTarget?.ProcessedTexture, _renderer.RenderTarget?.ProcessedSRV);
                 break;
             case AutoDraw.ImGuiOverlay:
                 _drawList.AddImage(
@@ -83,7 +90,7 @@ public class PctDrawList : IDisposable
                     ImGuiHelpers.MainViewport.Pos + texture.Size);
                 goto default;
             default:
-                PctService.OverlayNode.IsVisible = false;
+                _overlayNode?.IsVisible = false;
                 break;
         }
 

@@ -10,6 +10,12 @@ public sealed class PctOptions
     /// <summary>Initialize the DX renderer.</summary>
     public bool EnableDxRenderer { get; init; } = true;
 
+    /// <summary>
+    /// Init the KTK output used by AutoDraw.NativeOverlay.
+    /// If false, NativeOverlay will fall back to ImGuiOverlay.
+    /// </summary>
+    public bool EnableKtkOutput { get; init; } = false;
+
     /// <summary>Initialize the VFX renderer.</summary>
     public bool EnableVfxRenderer { get; init; } = true;
 

@@ -27,7 +27,6 @@ public class PctService
     private static OverlayController? _overlayController;
     private static PctOverlayNode? _overlayNode;
     public static VfxRenderer VfxRenderer => _vfxRenderer;
-    internal static PctOverlayNode OverlayNode => _overlayNode;
 
     internal static PctDrawList DrawList;
     internal static PctDrawHints Hints;
@@ -51,17 +50,20 @@ public class PctService
 
         if (options.EnableDxRenderer)
         {
-            KamiToolKitLibrary.Initialize(pluginInterface, "PctOverlay");
-            _kamiInitialized = true;
+            if (options.EnableKtkOutput)
+            {
+                KamiToolKitLibrary.Initialize(pluginInterface, "PctOverlay");
+                _kamiInitialized = true;
+                Framework.RunOnFrameworkThread(() =>
+                {
+                    _overlayController = new();
+                    _overlayNode = new();
+                    _overlayController.AddNode(_overlayNode);
+                });
+            }
 
             _dxRenderer = new(options);
             _sceneDepth = new();
-            Framework.RunOnFrameworkThread(() =>
-            {
-                _overlayController = new();
-                _overlayNode = new();
-                _overlayController.AddNode(_overlayNode);
-            });
         }
 
         if (options.EnableVfxRenderer)
@@ -142,6 +144,7 @@ public class PctService
             imguidrawlist,
             _dxRenderer,
             _sceneDepth,
+            _overlayNode,
             Hints.DefaultParams
         );
     }
