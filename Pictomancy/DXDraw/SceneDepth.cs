@@ -27,22 +27,22 @@ internal class SceneDepth : IDisposable
     internal unsafe void Update()
     {
         var rtm = RenderTargetManager.Instance();
-        var unk70 = rtm != null ? *(Texture**)((byte*)rtm + 0x70) : null;
-        if (unk70 == null || unk70->D3D11Texture2D == null)
+        var depthStencil = rtm != null ? rtm->DepthStencil : null;
+        if (depthStencil == null || depthStencil->D3D11Texture2D == null)
         {
             PctService.Log.Warning("[Pictomancy] SceneDepth.Update: scene depth source unavailable.");
             return;
         }
 
-        var depthStencil = new Texture2D((IntPtr)unk70->D3D11Texture2D);
-        EnsureCopy(depthStencil.Description);
-        RenderContext.Device.ImmediateContext.CopyResource(depthStencil, _copy);
+        var depthStencilSharp = new Texture2D((IntPtr)depthStencil->D3D11Texture2D);
+        EnsureCopy(depthStencilSharp.Description);
+        RenderContext.Device.ImmediateContext.CopyResource(depthStencilSharp, _copy);
 
-        // Unk70 is allocated at the max scaled resolution; only the (ActualWidth, ActualHeight)
+        // DepthStencil is allocated at the max scaled resolution; only the (ActualWidth, ActualHeight)
         // sub-rect contains live scene depth. Scale our [0,1] sample uvs accordingly.
         UvScale = new SharpDX.Vector2(
-            unk70->AllocatedWidth > 0 ? (float)unk70->ActualWidth / unk70->AllocatedWidth : 1f,
-            unk70->AllocatedHeight > 0 ? (float)unk70->ActualHeight / unk70->AllocatedHeight : 1f);
+            depthStencil->AllocatedWidth > 0 ? (float)depthStencil->ActualWidth / depthStencil->AllocatedWidth : 1f,
+            depthStencil->AllocatedHeight > 0 ? (float)depthStencil->ActualHeight / depthStencil->AllocatedHeight : 1f);
     }
 
     private void EnsureCopy(Texture2DDescription desc)

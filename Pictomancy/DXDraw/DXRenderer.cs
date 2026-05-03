@@ -110,10 +110,9 @@ internal class DXRenderer : IDisposable
         // Detect 3D resolution scaling
         bool resolutionScaled = false;
         var rtm = FFXIVClientStructs.FFXIV.Client.Graphics.Render.RenderTargetManager.Instance();
-        var unk70 = rtm != null ? *(FFXIVClientStructs.FFXIV.Client.Graphics.Kernel.Texture**)((byte*)rtm + 0x70) : null;
-        if (unk70 != null)
+        if (rtm != null && rtm->DepthStencil != null)
         {
-            resolutionScaled = unk70->ActualWidth != device->Width || unk70->ActualHeight != device->Height;
+            resolutionScaled = rtm->DepthStencil->ActualWidth != device->Width || rtm->DepthStencil->ActualHeight != device->Height;
         }
         bool useMask = PctService.Hints.UIMask == UIMask.BackbufferAlpha
             && PctService.Hints.AutoDraw != AutoDraw.NativeOverlay
