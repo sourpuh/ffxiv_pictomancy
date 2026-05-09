@@ -15,7 +15,7 @@ public record struct PctDxParams
     /// scene (or less) still draws at full alpha. Useful for ignoring z-fighting on uneven floors.
     /// 0 = strict occlusion. Typical values: [0.3, 1] for ground-level shapes on uneven terrain.
     /// </summary>
-    public float OcclusionTolerance { get; init; } = 0f;
+    public float OcclusionTolerance { get; init; } = 0.02f;
 
     /// <summary>
     /// World-space distance from camera at which the shape begins fading.
