@@ -28,7 +28,7 @@ internal class Stroke : IDisposable
         public Vector3 World;
         public float Thickness;
         public Vector4 Color;
-        public ushort Index;
+        public uint IsBoundary;
         public float OccludedAlpha;
         public float OcclusionTolerance;
         public float FadeStart;
@@ -54,34 +54,39 @@ internal class Stroke : IDisposable
             public void Add(ref Instance inst) => _lines.Add(ref inst);
             public void Add(Vector3[] world, float thickness, Vector4 color, bool closed, PctDxParams p)
             {
-                for (int i = 0; i < world.Length; i++)
+                int n = world.Length;
+                if (n < 2) return;
+
+                if (closed && n >= 3)
                 {
-                    _lines.Add(new Instance()
-                    {
-                        World = world[i],
-                        Thickness = thickness,
-                        Color = color,
-                        Index = (ushort)(i + 1),
-                        OccludedAlpha = p.OccludedAlpha,
-                        OcclusionTolerance = p.OcclusionTolerance,
-                        FadeStart = p.FadeStart,
-                        FadeStop = p.FadeStop,
-                    });
+                    AddInstance(world[n - 1], thickness, color, true, p);
+                    for (int i = 0; i < n; i++)
+                        AddInstance(world[i], thickness, color, false, p);
+                    AddInstance(world[0], thickness, color, false, p);
+                    AddInstance(world[1], thickness, color, true, p);
                 }
-                if (closed)
+                else
                 {
-                    _lines.Add(new Instance()
-                    {
-                        World = world[0],
-                        Thickness = thickness,
-                        Color = color,
-                        Index = (ushort)world.Length,
-                        OccludedAlpha = p.OccludedAlpha,
-                        OcclusionTolerance = p.OcclusionTolerance,
-                        FadeStart = p.FadeStart,
-                        FadeStop = p.FadeStop,
-                    });
+                    AddInstance(world[0], thickness, color, true, p);
+                    for (int i = 0; i < n; i++)
+                        AddInstance(world[i], thickness, color, false, p);
+                    AddInstance(world[n - 1], thickness, color, true, p);
                 }
+            }
+
+            private void AddInstance(Vector3 world, float thickness, Vector4 color, bool isBoundary, PctDxParams p)
+            {
+                _lines.Add(new Instance()
+                {
+                    World = world,
+                    Thickness = thickness,
+                    Color = color,
+                    IsBoundary = isBoundary ? 1u : 0u,
+                    OccludedAlpha = p.OccludedAlpha,
+                    OcclusionTolerance = p.OcclusionTolerance,
+                    FadeStart = p.FadeStart,
+                    FadeStop = p.FadeStop,
+                });
             }
         }
 
@@ -126,7 +131,8 @@ internal class Stroke : IDisposable
         _data = new(ctx, maxSegments, true);
         var shader = """
             #define FEATHER 2
-
+            #define MITER_LIMIT 4.0
+            
             cbuffer Constants : register(b0)
             {
                 float4x4 viewProj;
@@ -134,13 +140,12 @@ internal class Stroke : IDisposable
                 float2 pixelToUv;
             };
             """ + ShapeSharedShader.Mixin + """
-
             struct Line
             {
                 float3 world : WORLD;
                 float thickness : THICKNESS;
                 float4 color : COLOR;
-                min16uint index : INDEX;
+                uint isBoundary : ISBOUNDARY;
                 float4 fadeParams : FADEPARAMS;
             };
 
@@ -149,7 +154,7 @@ internal class Stroke : IDisposable
                 float4 projPos : SV_POSITION;
                 float thickness : THICKNESS;
                 float4 color : COLOR;
-                min16uint index : INDEX;
+                nointerpolation uint isBoundary : ISBOUNDARY;
                 float4 fadeParams : FADEPARAMS;
             };
 
@@ -168,90 +173,103 @@ internal class Stroke : IDisposable
 
                 v.thickness = l.thickness + FEATHER / 2;
                 v.color = l.color;
-                v.index = l.index;
+                v.isBoundary = l.isBoundary;
                 v.fadeParams = l.fadeParams;
 
                 v.projPos = mul(float4(l.world, 1), viewProj);
                 return v;
             }
 
-            float4 get_normal(float4 p0, float4 p1)
+            float2 perpendicularNdc(float2 dirPx, float2 rtSize)
             {
-                float3 dir = normalize(p1 - p0);
-
-                float3 ratio = float3(renderTargetSize.y, renderTargetSize.x, 0);
-                ratio = normalize(ratio);
-            
-                float3 unit_z = normalize(float3(0, 0, -1));
-            
-                float3 normal = normalize(cross(unit_z, dir) * ratio);
-            
-                return float4(normal * ratio, 0);
+                float2 perpPx = normalize(float2(dirPx.y, -dirPx.x));
+                return perpPx * (2.0 / rtSize);
             }
 
-            float unscale(inout float4 v)
+            float2 miterOffsetNdc(float2 perpA, float2 perpB, float halfThicknessPx, float2 rtSize, float miterLimit)
             {
-                float scale = v.w;
-                v /= v.w;
-                return scale;
+                float2 sum = perpA + perpB;
+                if (dot(sum, sum) < 1e-6) {
+                    // Hairpin
+                    return perpA * (halfThicknessPx * 2.0 / rtSize);
+                }
+                float2 miter = normalize(sum);
+                float invCos = 1.0 / max(dot(miter, perpB), 1.0 / miterLimit);
+                return miter * (halfThicknessPx * invCos * 2.0 / rtSize);
+            }
+
+            float2 endOffsetNdc(float2 neighborDeltaPx, float neighborW, float2 perpSegPx, float2 dirSegPx, float halfThicknessPx)
+            {
+                float near = viewProj._m32;
+                if (neighborW < near || dot(neighborDeltaPx, neighborDeltaPx) < 1e-4)
+                {
+                    return perpendicularNdc(dirSegPx, renderTargetSize) * halfThicknessPx;
+                }
+                float2 dirNeighborPx = normalize(neighborDeltaPx);
+                float2 perpNeighborPx = float2(dirNeighborPx.y, -dirNeighborPx.x);
+                return miterOffsetNdc(perpNeighborPx, perpSegPx, halfThicknessPx, renderTargetSize, MITER_LIMIT);
             }
 
             [maxvertexcount(4)]
-            void gs(line VSOutput input[2], inout TriangleStream<GSOutput> output)
+            void gs(lineadj VSOutput input[4], inout TriangleStream<GSOutput> output)
             {
-                VSOutput start = input[0];
-                VSOutput stop = input[1];
-            
-                if (start.index > stop.index) {
-                    return;
-                }
+                VSOutput prev  = input[0];
+                VSOutput start = input[1];
+                VSOutput stop  = input[2];
+                VSOutput next  = input[3];
+
+                if (start.isBoundary || stop.isBoundary) return;
 
                 if (start.projPos.w > stop.projPos.w)
                 {
-                    VSOutput tmp = start;
-                    start = stop;
-                    stop = tmp;
+                    VSOutput tmp1 = start; start = stop; stop = tmp1;
+                    VSOutput tmp2 = prev;  prev  = next; next = tmp2;
                 }
 
-                float nearPlane = 0.1;
-                if (start.projPos.w < nearPlane)
+                float near = viewProj._m32;
+                if (start.projPos.w < near)
                 {
-            	    float ratio = (nearPlane - start.projPos.w) / (stop.projPos.w - start.projPos.w);
-            	    start.projPos = lerp(start.projPos, stop.projPos, ratio);
+            	    float t = (near - start.projPos.w) / (stop.projPos.w - start.projPos.w);
+            	    start.projPos = lerp(start.projPos, stop.projPos, t);
                 }
-            
-                float4 p0 = start.projPos;
-                float w0 = unscale(p0);
-                float4 p1 = stop.projPos;
-                float w1 = unscale(p1);
 
-                float4 normal = get_normal(p0, p1);
+                float w0 = start.projPos.w;
+                float w1 = stop.projPos.w;
+                float4 p0 = start.projPos / w0;
+                float4 p1 = stop.projPos  / w1;
+                float2 prevNdc = prev.projPos.xy / max(prev.projPos.w, 1e-6);
+                float2 nextNdc = next.projPos.xy / max(next.projPos.w, 1e-6);
 
-                float4 start_normal = normal;
-                start_normal.xy *= (start.thickness) / renderTargetSize.y;
+                float2 startPx = p0.xy * (renderTargetSize * 0.5);
+                float2 stopPx  = p1.xy * (renderTargetSize * 0.5);
+                float2 prevPx  = prevNdc * (renderTargetSize * 0.5);
+                float2 nextPx  = nextNdc * (renderTargetSize * 0.5);
 
-                float4 stop_normal = normal;
-                stop_normal.xy *= (stop.thickness) / renderTargetSize.y;
+                float2 dirSegPx = normalize(stopPx - startPx);
+                float2 perpSegPx = float2(dirSegPx.y, -dirSegPx.x);
+
+                float2 startOffsetNdc = endOffsetNdc(startPx - prevPx, prev.projPos.w, perpSegPx, dirSegPx, start.thickness * 0.5);
+                float2 stopOffsetNdc  = endOffsetNdc(nextPx - stopPx,  next.projPos.w, perpSegPx, dirSegPx, stop.thickness  * 0.5);
 
                 GSOutput v;
                 v.thickness = start.thickness;
                 v.color = start.color;
                 v.fadeParams = start.fadeParams;
                 v.normal = 1;
-                v.projPos = w0 * (p0 + start_normal);
+                v.projPos = (p0 + float4(startOffsetNdc, 0, 0)) * w0;
                 output.Append(v);
                 v.normal = -1;
-                v.projPos = w0 * (p0 - start_normal);
+                v.projPos = (p0 - float4(startOffsetNdc, 0, 0)) * w0;
                 output.Append(v);
 
                 v.thickness = stop.thickness;
                 v.color = stop.color;
                 v.fadeParams = stop.fadeParams;
                 v.normal = 1;
-                v.projPos = w1 * (p1 + stop_normal);
+                v.projPos = (p1 + float4(stopOffsetNdc, 0, 0)) * w1;
                 output.Append(v);
                 v.normal = -1;
-                v.projPos = w1 * (p1 - stop_normal);
+                v.projPos = (p1 - float4(stopOffsetNdc, 0, 0)) * w1;
                 output.Append(v);
             }
 
@@ -292,7 +310,7 @@ internal class Stroke : IDisposable
             new InputElement("WORLD", 0, Format.R32G32B32_Float, -1, 0),
             new InputElement("THICKNESS", 0, Format.R32_Float, -1, 0),
             new InputElement("COLOR", 0, Format.R32G32B32A32_Float, -1, 0),
-            new InputElement("INDEX", 0, Format.R16_UInt, -1, 0),
+            new InputElement("ISBOUNDARY", 0, Format.R32_UInt, -1, 0),
             new InputElement("FADEPARAMS", 0, Format.R32G32B32A32_Float, -1, 0),
         ]);
     }
@@ -330,7 +348,7 @@ internal class Stroke : IDisposable
 
     private void Bind()
     {
-        _ctx.Context.InputAssembler.PrimitiveTopology = PrimitiveTopology.LineStrip;
+        _ctx.Context.InputAssembler.PrimitiveTopology = PrimitiveTopology.LineStripWithAdjacency;
         _ctx.Context.InputAssembler.InputLayout = _il;
         _ctx.Context.VertexShader.Set(_vs);
         _ctx.Context.VertexShader.SetConstantBuffer(0, _constantBuffer);

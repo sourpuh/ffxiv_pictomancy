@@ -175,13 +175,17 @@ public class PctDrawList : IDisposable
 
     public void PathStroke(uint color, PctStrokeFlags flags = default, float thickness = 2f, PctDxParams? p = null)
     {
+        bool closed = (flags & PctStrokeFlags.Closed) > 0;
+        if (closed && _path.Count >= 3 && _path[0].Equals(_path[_path.Count - 1]))
+            _path.RemoveAt(_path.Count - 1);
+
         if (_renderer.StrokeDegraded)
         {
-            _fallbackRenderer.DrawStroke(_path, thickness, color, (flags & PctStrokeFlags.Closed) > 0);
+            _fallbackRenderer.DrawStroke(_path, thickness, color, closed);
         }
         else
         {
-            _renderer.DrawStroke(_path, thickness, color, (flags & PctStrokeFlags.Closed) > 0, p ?? DefaultParams);
+            _renderer.DrawStroke(_path, thickness, color, closed, p ?? DefaultParams);
         }
         _path.Clear();
     }
