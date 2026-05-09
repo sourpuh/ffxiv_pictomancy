@@ -129,9 +129,9 @@ internal class Stroke : IDisposable
     {
         _ctx = ctx;
         _data = new(ctx, maxSegments, true);
-        var shader = """
-            #define FEATHER 2
-            #define MITER_LIMIT 4.0
+        var shader = ShapeSharedShader.Preamble + """
+            static const float FEATHER = 2;
+            static const float MITER_LIMIT = 4;
             
             cbuffer Constants : register(b0)
             {
@@ -146,7 +146,8 @@ internal class Stroke : IDisposable
                 float thickness : THICKNESS;
                 float4 color : COLOR;
                 uint isBoundary : ISBOUNDARY;
-                float4 fadeParams : FADEPARAMS;
+                float2 occlusionParams : OCCLUSIONPARAMS;
+                float2 fadeParams : FADEPARAMS;
             };
 
             struct VSOutput
@@ -155,7 +156,8 @@ internal class Stroke : IDisposable
                 float thickness : THICKNESS;
                 float4 color : COLOR;
                 nointerpolation uint isBoundary : ISBOUNDARY;
-                float4 fadeParams : FADEPARAMS;
+                float2 occlusionParams : OCCLUSIONPARAMS;
+                float2 fadeParams : FADEPARAMS;
             };
 
             struct GSOutput
@@ -164,7 +166,8 @@ internal class Stroke : IDisposable
                 float4 color : COLOR;
                 noperspective float normal : NORMAL;
                 float thickness : THICKNESS;
-                float4 fadeParams : FADEPARAMS;
+                float2 occlusionParams : OCCLUSIONPARAMS;
+                float2 fadeParams : FADEPARAMS;
             };
 
             VSOutput vs(in Line l)
@@ -174,6 +177,7 @@ internal class Stroke : IDisposable
                 v.thickness = l.thickness + FEATHER / 2;
                 v.color = l.color;
                 v.isBoundary = l.isBoundary;
+                v.occlusionParams = l.occlusionParams;
                 v.fadeParams = l.fadeParams;
 
                 v.projPos = mul(float4(l.world, 1), viewProj);
@@ -237,8 +241,8 @@ internal class Stroke : IDisposable
                 float w1 = stop.projPos.w;
                 float4 p0 = start.projPos / w0;
                 float4 p1 = stop.projPos  / w1;
-                float2 prevNdc = prev.projPos.xy / max(prev.projPos.w, 1e-6);
-                float2 nextNdc = next.projPos.xy / max(next.projPos.w, 1e-6);
+                float2 prevNdc = prev.projPos.xy / max(prev.projPos.w, SKY_DEPTH_EPS);
+                float2 nextNdc = next.projPos.xy / max(next.projPos.w, SKY_DEPTH_EPS);
 
                 float2 startPx = p0.xy * (renderTargetSize * 0.5);
                 float2 stopPx  = p1.xy * (renderTargetSize * 0.5);
@@ -254,6 +258,7 @@ internal class Stroke : IDisposable
                 GSOutput v;
                 v.thickness = start.thickness;
                 v.color = start.color;
+                v.occlusionParams = start.occlusionParams;
                 v.fadeParams = start.fadeParams;
                 v.normal = 1;
                 v.projPos = (p0 + float4(startOffsetNdc, 0, 0)) * w0;
@@ -264,6 +269,7 @@ internal class Stroke : IDisposable
 
                 v.thickness = stop.thickness;
                 v.color = stop.color;
+                v.occlusionParams = stop.occlusionParams;
                 v.fadeParams = stop.fadeParams;
                 v.normal = 1;
                 v.projPos = (p1 + float4(stopOffsetNdc, 0, 0)) * w1;
@@ -287,7 +293,7 @@ internal class Stroke : IDisposable
                 float f = unfeather(input.thickness, input.normal);
                 float4 color = input.color;
                 color.a *= exp2(-2.7 * f * f);
-                return applyShared(color, input.projPos.xyz, input.fadeParams);
+                return applyShared(color, input.projPos.xyz, input.occlusionParams, input.fadeParams);
             }
             """;
 
@@ -304,14 +310,15 @@ internal class Stroke : IDisposable
         _ps = new(ctx.Device, ps.Bytecode);
 
 
-        _constantBuffer = new(ctx.Device, 16 * 4 * 2, ResourceUsage.Default, BindFlags.ConstantBuffer, CpuAccessFlags.None, ResourceOptionFlags.None, 0);
+        _constantBuffer = new(ctx.Device, DXRenderer.AlignTo16<Constants>(), ResourceUsage.Default, BindFlags.ConstantBuffer, CpuAccessFlags.None, ResourceOptionFlags.None, 0);
         _il = new(ctx.Device, vs.Bytecode,
         [
             new InputElement("WORLD", 0, Format.R32G32B32_Float, -1, 0),
             new InputElement("THICKNESS", 0, Format.R32_Float, -1, 0),
             new InputElement("COLOR", 0, Format.R32G32B32A32_Float, -1, 0),
             new InputElement("ISBOUNDARY", 0, Format.R32_UInt, -1, 0),
-            new InputElement("FADEPARAMS", 0, Format.R32G32B32A32_Float, -1, 0),
+            new InputElement("OCCLUSIONPARAMS", 0, Format.R32G32_Float, -1, 0),
+            new InputElement("FADEPARAMS", 0, Format.R32G32_Float, -1, 0),
         ]);
     }
 

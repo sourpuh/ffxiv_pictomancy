@@ -51,6 +51,7 @@ public sealed class DemoWindow : Window, IDisposable
     private float _occlusionTolerance = 0.02f;
     private float _fadeStart = float.PositiveInfinity;
     private float _fadeStop = float.PositiveInfinity;
+    private float _projectionHeight = 0f;
 
     public DemoWindow()
         : base("Pictomancy Demo", ImGuiWindowFlags.AlwaysAutoResize)
@@ -90,6 +91,7 @@ public sealed class DemoWindow : Window, IDisposable
             ImGui.SliderFloat("Occlusion tolerance (m)", ref _occlusionTolerance, 0f, 5f);
             ImGui.SliderFloat("Fade start (m)", ref _fadeStart, 0f, 200f);
             ImGui.SliderFloat("Fade stop (m)", ref _fadeStop, 0f, 200f);
+            ImGui.SliderFloat("Projection height (m, 0 = off)", ref _projectionHeight, 0f, 10f);
         }
 
         if (ImGui.CollapsingHeader("Shapes", ImGuiTreeNodeFlags.DefaultOpen))
@@ -148,6 +150,7 @@ public sealed class DemoWindow : Window, IDisposable
                 OcclusionTolerance = _occlusionTolerance,
                 FadeStart = _fadeStart,
                 FadeStop = _fadeStop,
+                ProjectionHeight = _projectionHeight,
             },
         };
 

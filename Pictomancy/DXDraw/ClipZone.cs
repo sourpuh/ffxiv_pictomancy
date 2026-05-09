@@ -125,7 +125,7 @@ internal class ClipZone : IDisposable
         PctService.Log.Debug($"ClipZone PS compile: {ps.Message}");
         _ps = new(ctx.Device, ps.Bytecode);
 
-        _constantBuffer = new(ctx.Device, 16, ResourceUsage.Default, BindFlags.ConstantBuffer, CpuAccessFlags.None, ResourceOptionFlags.None, 0);
+        _constantBuffer = new(ctx.Device, DXRenderer.AlignTo16<Constants>(), ResourceUsage.Default, BindFlags.ConstantBuffer, CpuAccessFlags.None, ResourceOptionFlags.None, 0);
         _il = new(ctx.Device, vs.Bytecode,
         [
             new InputElement("RECTMIN", 0, Format.R32G32_Float, -1, 0, InputClassification.PerInstanceData, 1),

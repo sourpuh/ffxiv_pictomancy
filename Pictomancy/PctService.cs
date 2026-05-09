@@ -22,6 +22,8 @@ public class PctService
 
     private static DXRenderer? _dxRenderer;
     private static SceneDepth? _sceneDepth;
+    private static SceneInfo? _sceneInfo;
+    private static SceneNormal? _sceneNormal;
 
     private static VfxRenderer? _vfxRenderer;
     private static OverlayController? _overlayController;
@@ -64,6 +66,8 @@ public class PctService
 
             _dxRenderer = new(options);
             _sceneDepth = new();
+            _sceneInfo = new();
+            _sceneNormal = new();
         }
 
         if (options.EnableVfxRenderer)
@@ -98,6 +102,10 @@ public class PctService
         _dxRenderer = null;
         _sceneDepth?.Dispose();
         _sceneDepth = null;
+        _sceneInfo?.Dispose();
+        _sceneInfo = null;
+        _sceneNormal?.Dispose();
+        _sceneNormal = null;
         _vfxRenderer?.Dispose();
         _vfxRenderer = null;
         if (_vfxFrameworkSubscribed)
@@ -144,6 +152,8 @@ public class PctService
             imguidrawlist,
             _dxRenderer,
             _sceneDepth,
+            _sceneInfo,
+            _sceneNormal,
             _overlayNode,
             Hints.DefaultParams
         );

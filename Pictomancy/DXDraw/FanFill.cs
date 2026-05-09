@@ -105,9 +105,8 @@ internal class FanFill : IDisposable
     {
         _ctx = ctx;
         _data = new(ctx, maxFans, true);
-        var shader = """
-            #define PI 3.14159265359f
-            #define SEGMENTS 360
+        var shader = ShapeSharedShader.Preamble + """
+            static const int SEGMENTS = 360;
 
             cbuffer Constants : register(b0)
             {
@@ -125,7 +124,8 @@ internal class FanFill : IDisposable
                 float maxAngle : ANGLE1;
                 float4 colorOrigin : INSTANCECOLOR0;
                 float4 colorEnd : INSTANCECOLOR1;
-                float4 fadeParams : FADEPARAMS;
+                float2 occlusionParams : OCCLUSIONPARAMS;
+                float2 fadeParams : FADEPARAMS;
             };
 
             struct VSOutput
@@ -133,7 +133,8 @@ internal class FanFill : IDisposable
                 float4 projPos : SV_POSITION;
                 float4 color : COLOR;
                 float2 tex : TEXCOORD;
-                float4 fadeParams : FADEPARAMS;
+                float2 occlusionParams : OCCLUSIONPARAMS;
+                float2 fadeParams : FADEPARAMS;
             };
 
             VSOutput vs(in Fan instance, uint vertexId: SV_VERTEXID, uint instanceId: SV_INSTANCEID)
@@ -159,13 +160,14 @@ internal class FanFill : IDisposable
 
                 o.tex.x = angle;
                 o.projPos = mul(float4(instance.origin + offset, 1.0), viewProj);
+                o.occlusionParams = instance.occlusionParams;
                 o.fadeParams = instance.fadeParams;
                 return o;
             }
 
             float4 ps(VSOutput input) : SV_TARGET
             {
-                return applyShared(input.color, input.projPos.xyz, input.fadeParams);
+                return applyShared(input.color, input.projPos.xyz, input.occlusionParams, input.fadeParams);
             }
             """;
 
@@ -177,7 +179,7 @@ internal class FanFill : IDisposable
         PctService.Log.Debug($"Circle PS compile: {ps.Message}");
         _ps = new(ctx.Device, ps.Bytecode);
 
-        _constantBuffer = new(ctx.Device, 16 * 5, ResourceUsage.Default, BindFlags.ConstantBuffer, CpuAccessFlags.None, ResourceOptionFlags.None, 0);
+        _constantBuffer = new(ctx.Device, DXRenderer.AlignTo16<Constants>(), ResourceUsage.Default, BindFlags.ConstantBuffer, CpuAccessFlags.None, ResourceOptionFlags.None, 0);
         _il = new(ctx.Device, vs.Bytecode,
         [
             new InputElement("WORLD", 0, Format.R32G32B32_Float, -1, 0, InputClassification.PerInstanceData, 1),
@@ -187,7 +189,8 @@ internal class FanFill : IDisposable
             new InputElement("ANGLE", 1, Format.R32_Float, -1, 0, InputClassification.PerInstanceData, 1),
             new InputElement("INSTANCECOLOR", 0, Format.R32G32B32A32_Float, -1, 0, InputClassification.PerInstanceData, 1),
             new InputElement("INSTANCECOLOR", 1, Format.R32G32B32A32_Float, -1, 0, InputClassification.PerInstanceData, 1),
-            new InputElement("FADEPARAMS", 0, Format.R32G32B32A32_Float, -1, 0, InputClassification.PerInstanceData, 1),
+            new InputElement("OCCLUSIONPARAMS", 0, Format.R32G32_Float, -1, 0, InputClassification.PerInstanceData, 1),
+            new InputElement("FADEPARAMS", 0, Format.R32G32_Float, -1, 0, InputClassification.PerInstanceData, 1),
         ]);
     }
 

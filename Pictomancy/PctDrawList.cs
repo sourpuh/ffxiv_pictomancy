@@ -1,5 +1,4 @@
 using Dalamud.Interface.Utility;
-using KamiToolKit.Overlay.UiOverlay;
 using Pictomancy.DXDraw;
 using Pictomancy.ImGuiDraw;
 using System.Drawing;
@@ -13,6 +12,8 @@ public class PctDrawList : IDisposable
     internal readonly List<Vector3> _path;
     internal readonly DXRenderer _renderer;
     internal readonly SceneDepth _sceneDepth;
+    internal readonly SceneInfo _sceneInfo;
+    internal readonly SceneNormal _sceneNormal;
     internal readonly PctOverlayNode? _overlayNode;
     internal readonly ImGuiRenderer _fallbackRenderer;
     internal readonly bool isMyWindow;
@@ -22,7 +23,7 @@ public class PctDrawList : IDisposable
     /// <summary>Default rendering params applied to any shape that doesn't pass an explicit override.</summary>
     public PctDxParams DefaultParams { get; }
 
-    internal PctDrawList(ImDrawListPtr? drawlist, DXRenderer renderer, SceneDepth sceneDepth, PctOverlayNode? overlayNode = null, PctDxParams? defaultParams = null)
+    internal PctDrawList(ImDrawListPtr? drawlist, DXRenderer renderer, SceneDepth sceneDepth, SceneInfo sceneInfo, SceneNormal sceneNormal, PctOverlayNode? overlayNode = null, PctDxParams? defaultParams = null)
     {
         DefaultParams = defaultParams ?? new PctDxParams();
         if (drawlist != null)
@@ -51,10 +52,14 @@ public class PctDrawList : IDisposable
         _path = new();
         _renderer = renderer;
         _sceneDepth = sceneDepth;
+        _sceneInfo = sceneInfo;
+        _sceneNormal = sceneNormal;
         _overlayNode = overlayNode;
         _texture = null;
         _renderer.BeginFrame();
         _sceneDepth.Update();
+        _sceneInfo.Update();
+        _sceneNormal.Update();
         _fallbackRenderer = new(_drawList);
     }
 
@@ -62,7 +67,7 @@ public class PctDrawList : IDisposable
     {
         if (_texture == null)
         {
-            var target = _renderer.EndFrame(_sceneDepth.SRV, _sceneDepth.UvScale);
+            var target = _renderer.EndFrame(_sceneDepth.SRV, _sceneDepth.UvScale, _sceneInfo.SRV, _sceneNormal.SRV);
             _texture = target.Texture;
         }
         return _texture.Value;
@@ -190,14 +195,20 @@ public class PctDrawList : IDisposable
         _path.Clear();
     }
 
-    public void AddTriangleFilled(Vector3 a, Vector3 b, Vector3 c, uint color, PctDxParams? p = null)
+    /// <summary>
+    /// Draw a filled triangle. <paramref name="aaMask"/>'s x/y/z components enable AA on the edge
+    /// opposite vertex A/B/C respectively (1 = fwidth-based fade, 0 = hard cut). Default is no AA
+    /// on any edge so triangles composed into a larger polygon don't show seams at the shared
+    /// edges; pass <see cref="Vector3.One"/> for a single anti-aliased triangle.
+    /// </summary>
+    public void AddTriangleFilled(Vector3 a, Vector3 b, Vector3 c, uint color, PctDxParams? p = null, Vector3? aaMask = null)
     {
-        AddTriangleFilled(a, b, c, color, color, color, p);
+        AddTriangleFilled(a, b, c, color, color, color, p, aaMask);
     }
 
-    public void AddTriangleFilled(Vector3 a, Vector3 b, Vector3 c, uint colorA, uint colorB, uint colorC, PctDxParams? p = null)
+    public void AddTriangleFilled(Vector3 a, Vector3 b, Vector3 c, uint colorA, uint colorB, uint colorC, PctDxParams? p = null, Vector3? aaMask = null)
     {
-        _renderer.DrawTriangle(a, b, c, colorA, colorB, colorC, p ?? DefaultParams);
+        _renderer.DrawTriangle(a, b, c, colorA, colorB, colorC, aaMask ?? Vector3.Zero, p ?? DefaultParams);
     }
 
     public void AddLine(Vector3 start, Vector3 stop, float halfWidth, uint color, float thickness = 2, PctDxParams? p = null)
@@ -230,8 +241,13 @@ public class PctDrawList : IDisposable
 
     public void AddQuadFilled(Vector3 a, Vector3 b, Vector3 c, Vector3 d, uint colorA, uint colorB, uint colorC, uint colorD, PctDxParams? p = null)
     {
-        AddTriangleFilled(a, b, c, colorA, colorB, colorC, p);
-        AddTriangleFilled(a, c, d, colorA, colorC, colorD, p);
+        // Quad ABCD split as tris ABC + ACD with shared diagonal AC. Each triangle's mask enables
+        // AA on its two external edges and disables it on the diagonal so the join doesn't seam.
+        // Mask axis x/y/z corresponds to the edge opposite vertex A/B/C of that triangle.
+        //   tri(A,B,C): diagonal AC is opposite B -> mask.y = 0; other edges get AA.
+        //   tri(A,C,D): diagonal AC is opposite D -> mask.z = 0; other edges get AA.
+        AddTriangleFilled(a, b, c, colorA, colorB, colorC, p, new Vector3(1, 0, 1));
+        AddTriangleFilled(a, c, d, colorA, colorC, colorD, p, new Vector3(1, 1, 0));
     }
 
     public void AddCircle(Vector3 origin, float radius, uint color, uint numSegments = 0, float thickness = 2, PctDxParams? p = null)

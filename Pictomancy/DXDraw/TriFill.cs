@@ -97,7 +97,7 @@ internal class TriFill : IDisposable
     {
         _ctx = ctx;
         _data = new(ctx, maxVertices, true);
-        var shader = """
+        var shader = ShapeSharedShader.Preamble + """
             cbuffer Constants : register(b0)
             {
                 float4x4 viewProj;
@@ -108,14 +108,16 @@ internal class TriFill : IDisposable
             {
                 float3 pos : WORLD;
                 float4 color : COLOR;
-                float4 fadeParams : FADEPARAMS;
+                float2 occlusionParams : OCCLUSIONPARAMS;
+                float2 fadeParams : FADEPARAMS;
             };
 
             struct VSOutput
             {
                 float4 projPos : SV_POSITION;
                 float4 color : COLOR;
-                float4 fadeParams : FADEPARAMS;
+                float2 occlusionParams : OCCLUSIONPARAMS;
+                float2 fadeParams : FADEPARAMS;
             };
 
             VSOutput vs(Point v)
@@ -123,13 +125,14 @@ internal class TriFill : IDisposable
                 VSOutput vs;
                 vs.projPos = mul(float4(v.pos, 1), viewProj);
                 vs.color = v.color;
+                vs.occlusionParams = v.occlusionParams;
                 vs.fadeParams = v.fadeParams;
                 return vs;
             }
 
             float4 ps(VSOutput input) : SV_TARGET
             {
-                return applyShared(input.color, input.projPos.xyz, input.fadeParams);
+                return applyShared(input.color, input.projPos.xyz, input.occlusionParams, input.fadeParams);
             }
             """;
 
@@ -141,12 +144,13 @@ internal class TriFill : IDisposable
         PctService.Log.Debug($"Point PS compile: {ps.Message}");
         _ps = new(ctx.Device, ps.Bytecode);
 
-        _constantBuffer = new(ctx.Device, 16 * 5, ResourceUsage.Default, BindFlags.ConstantBuffer, CpuAccessFlags.None, ResourceOptionFlags.None, 0);
+        _constantBuffer = new(ctx.Device, DXRenderer.AlignTo16<Constants>(), ResourceUsage.Default, BindFlags.ConstantBuffer, CpuAccessFlags.None, ResourceOptionFlags.None, 0);
         _il = new(ctx.Device, vs.Bytecode,
         [
             new InputElement("WORLD", 0, Format.R32G32B32_Float, -1, 0),
             new InputElement("COLOR", 0, Format.R32G32B32A32_Float, -1, 0),
-            new InputElement("FADEPARAMS", 0, Format.R32G32B32A32_Float, -1, 0),
+            new InputElement("OCCLUSIONPARAMS", 0, Format.R32G32_Float, -1, 0),
+            new InputElement("FADEPARAMS", 0, Format.R32G32_Float, -1, 0),
         ]);
     }
 

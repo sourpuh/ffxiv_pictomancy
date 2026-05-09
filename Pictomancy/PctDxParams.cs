@@ -30,5 +30,14 @@ public record struct PctDxParams
     /// </summary>
     public float FadeStop { get; init; } = float.PositiveInfinity;
 
+    /// <summary>
+    /// World-space half-height of the projection volume around the shape origin.
+    /// Supported for Fan and Triangle based shapes, not for Strokes.
+    /// When non-zero, supported shapes are projected onto scene geometry within this Y range instead of drawn as flat geometry.
+    /// Pixels that don't project onto geometry are not drawn.
+    /// Default = 0 (no projection).
+    /// </summary>
+    public float ProjectionHeight { get; init; } = 0f;
+
     public PctDxParams() { }
 }
