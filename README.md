@@ -4,7 +4,7 @@ Pictomancy has an ImGui-like interface that operates in world space instead of a
 Pictomancy simplifies the hard parts of 3D overlays by correctly clipping objects behind the camera and clipping around the native UI.
 
 ## Demonstration
-<video src="readmeImages/projectionDemo.mp4" controls></video>
+https://github.com/user-attachments/assets/a7963703-df6a-44fa-9659-f768d0abdced
 
 ## Installation
 Nuget package: https://www.nuget.org/packages/Pictomancy
