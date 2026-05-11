@@ -39,6 +39,18 @@ public void Dispose()
 
 `Initialize()` accepts an optional `PctOptions` object which can disable specific renderers or adjust DX buffer sizes.
 
+### Primitives
+Pictomancy overlay drawing supports three primitive types: Strokes, Fans, and Triangles.
+* Strokes are connected line segments with a pixel thickness.
+    * `AddCircle` uses the Stroke primitive to draw a circle outline.
+    * `PathLineTo`, `PathArcTo`, and `PathStroke` can be used to draw arbitrary lines.
+* Fans are filled round shapes such as circles, donuts, and cones.
+    * `AddCircleFilled` draws using the Fan primitive to draw a filled circle.
+* Triangles are used for filled quads, segmented fan fill, or user defined complex shapes such as cubes or spheres.
+    * `AddQuadFilled` uses two Triangle primitives to draw a filled quadrilateral.
+
+Fans and Triangles may be projected onto the world and support color interpolation.
+
 ### Drawing an ImGui overlay with DirectX Renderer
 ```c#
 using (var drawList = PctService.Draw())
@@ -76,8 +88,9 @@ using (var drawList = PctService.Draw(new PctDrawHints
 drawList.AddCircleFilled(origin, radius, fillColor);
 
 // Applies override params:
-drawList.AddCircle(origin, radius, outlineColor,
-    p: new PctDxParams { OccludedAlpha = 0f }); // strict occlusion for this shape only
+// Project the circle +/- 10 meters vertically
+drawList.AddCircleFilled(origin, radius, fillColor,
+    p: new PctDxParams { ProjectionHeight = 10f });
 ```
 
 ##### OccludedAlpha (0 to 1, default 1)
