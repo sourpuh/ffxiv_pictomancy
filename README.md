@@ -3,7 +3,8 @@ Pictomancy is a library for drawing 3D world overlays and VFX in Dalamud plugins
 Pictomancy has an ImGui-like interface that operates in world space instead of a 2D canvas.
 Pictomancy simplifies the hard parts of 3D overlays by correctly clipping objects behind the camera and clipping around the native UI.
 
-# Pictomancy is still in development and does not have a stable API. Use at your own risk.
+## Demonstration
+<video src="readmeImages/projectionDemo.mp4" controls></video>
 
 ## Installation
 Nuget package: https://www.nuget.org/packages/Pictomancy
@@ -96,6 +97,14 @@ Linear fade based on the pixel's distance from the camera.
 - Pixels closer than `FadeStart` draw at full alpha.
 - Pixels at or beyond `FadeStop` are invisible.
 - Linear fade between. Default `Infinity` disables distance fade.
+
+##### ProjectionHeight (0 to Infinity, default 0)
+The height in world meters at which to project the primitive. Projections are drawn with a fresnel effect + a fade at the top and bottom 20% height.
+- Only Fan and Triangle primitives can be projected, not Strokes.
+- If projection height is 0, the fans are drawn flat on the XZ plane, triangles on whatever plane is specified.
+- If projection height is greater than 0, fans and triangles are projected up and down by the specified height.
+- There is no way for projections to be occluded; projectionHeight is mutually exclusive with occlusion parameters.
+<img src="ReadmeImages/projectionHeight.png">
 
 #### AutoDraw & UI Masking
 UI masking is used to hide the pictomancy overlay behind the native UI.
