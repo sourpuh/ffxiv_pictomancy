@@ -15,6 +15,7 @@ internal class DXRenderer : IDisposable
     public ProjectedFanFill? ProjectedFanFill { get; init; }
     public ProjectedTriFill? ProjectedTriFill { get; init; }
     public Stroke? Stroke { get; init; }
+    public Mirror? Mirror { get; init; }
     public FullScreenPass FSP { get; init; }
     public ClipZone ClipZone { get; init; }
 
@@ -76,6 +77,14 @@ internal class DXRenderer : IDisposable
         {
             PctService.Log.Error(e, "[Pictomancy] Failed to compile stroke shader; starting in degraded mode.");
         }
+        try
+        {
+            Mirror = new(RenderContext, options.MaxMirrors);
+        }
+        catch (Exception e)
+        {
+            PctService.Log.Error(e, "[Pictomancy] Failed to compile mirror shader; mirror draws will be skipped.");
+        }
 
         // TriFill's buffer doubles as the fan-fallback path's storage in degraded mode.
         TriFill = new(RenderContext, options.MaxTriangleVertices + (FanDegraded ? options.MaxFans * 360 : 0));
@@ -125,6 +134,7 @@ internal class DXRenderer : IDisposable
         ProjectedFanFill?.Dispose();
         ProjectedTriFill?.Dispose();
         Stroke?.Dispose();
+        Mirror?.Dispose();
         ClipZone.Dispose();
         FSP.Dispose();
         _clipZoneDSS.Dispose();
@@ -162,13 +172,22 @@ internal class DXRenderer : IDisposable
         RenderTarget.Bind(RenderContext);
     }
 
-    internal unsafe RenderTarget EndFrame(ShaderResourceView? sceneDepthSRV, SharpDX.Vector2 sceneDepthUvScale, ShaderResourceView? sceneInfoSRV, ShaderResourceView? sceneNormalSRV)
+    internal unsafe RenderTarget EndFrame(ShaderResourceView? sceneDepthSRV, SharpDX.Vector2 sceneDepthUvScale, ShaderResourceView? sceneInfoSRV, ShaderResourceView? sceneNormalSRV, ShaderResourceView? charaViewSRV)
     {
         var rtSize = new Vector2(ViewportSize.X, ViewportSize.Y);
         var pixelToUv = new Vector2(sceneDepthUvScale.X, sceneDepthUvScale.Y) / rtSize;
         TriFill.UpdateConstants(new() { ViewProj = ViewProj, PixelToUv = pixelToUv });
         FanFill?.UpdateConstants(new() { ViewProj = ViewProj, PixelToUv = pixelToUv });
         Stroke?.UpdateConstants(new() { ViewProj = ViewProj, RenderTargetSize = rtSize, PixelToUv = pixelToUv });
+        if (Mirror?.HasPending == true)
+        {
+            Mirror.UpdateConstants(new()
+            {
+                ViewProj = ViewProj,
+                PixelToUv = pixelToUv,
+                HasTexture = charaViewSRV != null ? 1f : 0f,
+            });
+        }
         if (ProjectedFanFill?.HasPending == true || ProjectedTriFill?.HasPending == true)
         {
             var invViewProj = ViewProj;
@@ -200,7 +219,7 @@ internal class DXRenderer : IDisposable
             }
         }
 
-        bool hasShapes = TriFill.HasPending || FanFill?.HasPending == true || ProjectedFanFill?.HasPending == true || ProjectedTriFill?.HasPending == true || Stroke?.HasPending == true;
+        bool hasShapes = TriFill.HasPending || FanFill?.HasPending == true || ProjectedFanFill?.HasPending == true || ProjectedTriFill?.HasPending == true || Stroke?.HasPending == true || Mirror?.HasPending == true;
         if (hasShapes && sceneDepthSRV != null)
         {
             // DSV-only target with cleared stencil for the clip-zone pass.
@@ -226,6 +245,12 @@ internal class DXRenderer : IDisposable
         FlushProjectedInOrder();
         TriFill.Flush();
         FanFill?.Flush();
+        if (Mirror?.HasPending == true)
+        {
+            Mirror.BindCharaTexture(charaViewSRV);
+            Mirror.Flush();
+            Mirror.BindCharaTexture(null);
+        }
         Stroke?.Flush();
 
         var device = Device.Instance();
@@ -299,8 +324,7 @@ internal class DXRenderer : IDisposable
         }
         else
         {
-            // Non-projected TriFill has no edge AA; aaMask is ignored on this path.
-            TriFill.Add(a, b, c, colorA, colorB, colorC, p);
+            TriFill.Add(a, b, c, colorA, colorB, colorC, aaMask, p);
         }
     }
 
@@ -312,6 +336,10 @@ internal class DXRenderer : IDisposable
         if (numSegments == 0) numSegments = (uint)(MathF.Abs(totalAngle) * 8);
 
         float angleStep = totalAngle / numSegments;
+        // For full-circle fans the minA/maxA radials coincide and shouldn't be AA'd; otherwise
+        // only the first segment's "prev" radial and the last segment's "offset" radial are
+        // external, all other radials are internal between adjacent segments.
+        bool fullCircle = MathF.Abs(totalAngle) >= 2 * MathF.PI - 1e-3f;
 
         Vector3 prev = new();
         for (int step = 0; step <= numSegments; step++)
@@ -321,18 +349,28 @@ internal class DXRenderer : IDisposable
 
             if (step > 0)
             {
+                bool firstSeg = step == 1;
+                bool lastSeg = step == numSegments;
+                float prevRadialMask = (firstSeg && !fullCircle) ? 1f : 0f;
+                float offsetRadialMask = (lastSeg && !fullCircle) ? 1f : 0f;
                 if (innerRadius > 0)
                 {
-                    // Fan fallback: shared edges between adjacent segment triangles get hard cuts
-                    // (Vector3.Zero) so the ring doesn't show seams. Real edge AA would require
-                    // per-triangle masks; this fallback path is degraded-mode only, so we keep it
-                    // simple and accept slightly aliased perimeter edges.
-                    DrawTriangle(center + innerRadius * prev, center + outerRadius * prev, center + outerRadius * offset, innerColor, outerColor, outerColor, Vector3.Zero, p);
-                    DrawTriangle(center + outerRadius * offset, center + innerRadius * offset, center + innerRadius * prev, outerColor, innerColor, innerColor, Vector3.Zero, p);
+                    // Donut segment, two tris share the diagonal between innerR*prev and outerR*offset.
+                    // Tri 1 (innerR*prev, outerR*prev, outerR*offset): edge BC = outer arc (ext),
+                    // CA = diagonal (int), AB = prev radial.
+                    var mask1 = new Vector3(1f, 0f, prevRadialMask);
+                    DrawTriangle(center + innerRadius * prev, center + outerRadius * prev, center + outerRadius * offset, innerColor, outerColor, outerColor, mask1, p);
+                    // Tri 2 (outerR*offset, innerR*offset, innerR*prev): edge BC = inner arc (ext),
+                    // CA = diagonal (int), AB = offset radial.
+                    var mask2 = new Vector3(1f, 0f, offsetRadialMask);
+                    DrawTriangle(center + outerRadius * offset, center + innerRadius * offset, center + innerRadius * prev, outerColor, innerColor, innerColor, mask2, p);
                 }
                 else
                 {
-                    DrawTriangle(center, center + outerRadius * prev, center + outerRadius * offset, innerColor, outerColor, outerColor, Vector3.Zero, p);
+                    // Cone segment: single tri (center, outerR*prev, outerR*offset). Outer arc is BC,
+                    // radials are CA (offset) and AB (prev).
+                    var mask = new Vector3(1f, offsetRadialMask, prevRadialMask);
+                    DrawTriangle(center, center + outerRadius * prev, center + outerRadius * offset, innerColor, outerColor, outerColor, mask, p);
                 }
             }
             prev = offset;
@@ -359,6 +397,11 @@ internal class DXRenderer : IDisposable
     public void DrawStroke(IEnumerable<Vector3> world, float thickness, uint color, bool closed, PctDxParams p)
     {
         Stroke?.Add(world.ToArray(), thickness, color, closed, p);
+    }
+
+    public void DrawMirror(Vector3 center, Vector3 facing, float width, float aspect, uint color, PctDxParams p)
+    {
+        Mirror?.Add(center, facing, width, aspect, color, p);
     }
 
     private static unsafe SharpDX.Matrix ReadMatrix(IntPtr address)

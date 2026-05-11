@@ -30,4 +30,6 @@ public sealed class PctOptions
 
     /// <summary>Max clip-zone rectangles drawn per frame.</summary>
     public int MaxClipZones { get; init; } = 1024;
+
+    public int MaxMirrors { get; init; } = 64;
 }

@@ -24,6 +24,7 @@ public class PctService
     private static SceneDepth? _sceneDepth;
     private static SceneInfo? _sceneInfo;
     private static SceneNormal? _sceneNormal;
+    private static CharaViewTexture? _charaView;
 
     private static VfxRenderer? _vfxRenderer;
     private static OverlayController? _overlayController;
@@ -68,6 +69,7 @@ public class PctService
             _sceneDepth = new();
             _sceneInfo = new();
             _sceneNormal = new();
+            _charaView = new();
         }
 
         if (options.EnableVfxRenderer)
@@ -106,6 +108,8 @@ public class PctService
         _sceneInfo = null;
         _sceneNormal?.Dispose();
         _sceneNormal = null;
+        _charaView?.Dispose();
+        _charaView = null;
         _vfxRenderer?.Dispose();
         _vfxRenderer = null;
         if (_vfxFrameworkSubscribed)
@@ -154,6 +158,7 @@ public class PctService
             _sceneDepth,
             _sceneInfo,
             _sceneNormal,
+            _charaView,
             _overlayNode,
             Hints.DefaultParams
         );

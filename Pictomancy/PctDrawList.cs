@@ -14,6 +14,7 @@ public class PctDrawList : IDisposable
     internal readonly SceneDepth _sceneDepth;
     internal readonly SceneInfo _sceneInfo;
     internal readonly SceneNormal _sceneNormal;
+    internal readonly CharaViewTexture _charaView;
     internal readonly PctOverlayNode? _overlayNode;
     internal readonly ImGuiRenderer _fallbackRenderer;
     internal readonly bool isMyWindow;
@@ -23,7 +24,7 @@ public class PctDrawList : IDisposable
     /// <summary>Default rendering params applied to any shape that doesn't pass an explicit override.</summary>
     public PctDxParams DefaultParams { get; }
 
-    internal PctDrawList(ImDrawListPtr? drawlist, DXRenderer renderer, SceneDepth sceneDepth, SceneInfo sceneInfo, SceneNormal sceneNormal, PctOverlayNode? overlayNode = null, PctDxParams? defaultParams = null)
+    internal PctDrawList(ImDrawListPtr? drawlist, DXRenderer renderer, SceneDepth sceneDepth, SceneInfo sceneInfo, SceneNormal sceneNormal, CharaViewTexture charaView, PctOverlayNode? overlayNode = null, PctDxParams? defaultParams = null)
     {
         DefaultParams = defaultParams ?? new PctDxParams();
         if (drawlist != null)
@@ -54,12 +55,14 @@ public class PctDrawList : IDisposable
         _sceneDepth = sceneDepth;
         _sceneInfo = sceneInfo;
         _sceneNormal = sceneNormal;
+        _charaView = charaView;
         _overlayNode = overlayNode;
         _texture = null;
         _renderer.BeginFrame();
         _sceneDepth.Update();
         _sceneInfo.Update();
         _sceneNormal.Update();
+        _charaView.Update();
         _fallbackRenderer = new(_drawList);
     }
 
@@ -67,7 +70,7 @@ public class PctDrawList : IDisposable
     {
         if (_texture == null)
         {
-            var target = _renderer.EndFrame(_sceneDepth.SRV, _sceneDepth.UvScale, _sceneInfo.SRV, _sceneNormal.SRV);
+            var target = _renderer.EndFrame(_sceneDepth.SRV, _sceneDepth.UvScale, _sceneInfo.SRV, _sceneNormal.SRV, _charaView.SRV);
             _texture = target.Texture;
         }
         return _texture.Value;
@@ -300,5 +303,13 @@ public class PctDrawList : IDisposable
     public void AddFanFilled(Vector3 origin, float innerRadius, float outerRadius, float minAngle, float maxAngle, uint color, uint? outerColor = null, uint numSegments = 0, PctDxParams? p = null)
     {
         _renderer.DrawFan(origin, innerRadius, outerRadius, minAngle, maxAngle, color, outerColor ?? color, numSegments, p ?? DefaultParams);
+    }
+
+    public void AddMirror(Vector3 center, Vector3 facing, float width, uint color = 0xFFFFFFFF, PctDxParams? p = null)
+    {
+        float aspect = _charaView.Width > 0 && _charaView.Height > 0
+            ? (float)_charaView.Width / _charaView.Height
+            : 1f;
+        _renderer.DrawMirror(center, facing, width, aspect, color, p ?? DefaultParams);
     }
 }
