@@ -37,7 +37,7 @@ internal class SceneNormal : IDisposable
         var rtm = RenderTargetManager.Instance();
         if (rtm == null) return;
 
-        var normalTexPtr = *(FFXIVClientStructs.FFXIV.Client.Graphics.Kernel.Texture**)((byte*)rtm + 0x20);
+        var normalTexPtr = rtm->GBuffers[0].Value;
         if (normalTexPtr == null || normalTexPtr->D3D11ShaderResourceView == null)
         {
             DropSrv();

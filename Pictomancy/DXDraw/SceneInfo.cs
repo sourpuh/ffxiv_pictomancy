@@ -38,7 +38,8 @@ internal class SceneInfo : IDisposable
         var rtm = RenderTargetManager.Instance();
         if (rtm == null) return;
 
-        var sceneTexPtr = *(FFXIVClientStructs.FFXIV.Client.Graphics.Kernel.Texture**)((byte*)rtm + 0x38);
+        
+        var sceneTexPtr = rtm->GBuffers[3].Value;
         if (sceneTexPtr == null || sceneTexPtr->D3D11ShaderResourceView == null)
         {
             DropSrv();
