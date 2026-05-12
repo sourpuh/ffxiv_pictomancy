@@ -6,8 +6,9 @@ public enum UIMask
     None = 0,
     /// <summary>
     /// Mask pixels where the game's backbuffer alpha indicates UI. Pictomancy renders "behind" the UI.
-    /// BackbufferSubtractedAlpha masking is used instead if 3D resolution scaling is detected.\
+    /// BackbufferSubtractedAlpha masking is used instead if 3D resolution scaling is detected.
     /// Automatically disabled if using AutoDraw.NativeOverlay.
+    /// There are some locations where this mask does not work well, such as O8.
     /// </summary>
     BackbufferAlpha = 1,
     /// <summary>
