@@ -190,16 +190,16 @@ internal class Stroke : IDisposable
                 return perpPx * (2.0 / rtSize);
             }
 
-            float2 miterOffsetNdc(float2 perpA, float2 perpB, float halfThicknessPx, float2 rtSize, float miterLimit)
+            float2 miterOffsetNdc(float2 perpA, float2 perpB, float halfThicknessPx, float2 rtSize)
             {
                 float2 sum = perpA + perpB;
-                if (dot(sum, sum) < 1e-6) {
+                float sumLenSq = dot(sum, sum);
+                if (sumLenSq * MITER_LIMIT * MITER_LIMIT < 4.0)
+                {
                     // Hairpin
-                    return perpA * (halfThicknessPx * 2.0 / rtSize);
+                    return perpB * (halfThicknessPx * 2.0 / rtSize);
                 }
-                float2 miter = normalize(sum);
-                float invCos = 1.0 / max(dot(miter, perpB), 1.0 / miterLimit);
-                return miter * (halfThicknessPx * invCos * 2.0 / rtSize);
+                return sum * (halfThicknessPx * 4.0 / sumLenSq) / rtSize;
             }
 
             float2 endOffsetNdc(float2 neighborDeltaPx, float neighborW, float2 perpSegPx, float2 dirSegPx, float halfThicknessPx)
@@ -211,7 +211,7 @@ internal class Stroke : IDisposable
                 }
                 float2 dirNeighborPx = normalize(neighborDeltaPx);
                 float2 perpNeighborPx = float2(dirNeighborPx.y, -dirNeighborPx.x);
-                return miterOffsetNdc(perpNeighborPx, perpSegPx, halfThicknessPx, renderTargetSize, MITER_LIMIT);
+                return miterOffsetNdc(perpNeighborPx, perpSegPx, halfThicknessPx, renderTargetSize);
             }
 
             [maxvertexcount(4)]

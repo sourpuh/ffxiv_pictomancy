@@ -18,7 +18,7 @@ public sealed class DemoWindow : Window, IDisposable
     private bool _drawWhenFaded;
     private int _maxAlpha = 255;
     private int _blendMode = (int)AlphaBlendMode.Add;
-    private int _uiMask = (int)UIMask.BackbufferAlpha;
+    private int _uiMask = (int)UIMask.BackbufferSubtraction;
     private float _occludedAlpha = 0f;
     private float _occlusionTolerance = 0.02f;
     private float _fadeStart = float.PositiveInfinity;
@@ -278,13 +278,22 @@ public sealed class DemoWindow : Window, IDisposable
         public float HalfWidth = 0.5f;
         public Vector4 Color = new(1f, 0.6f, 0.2f, 1f);
         public Vector4 OuterColor = new(1f, 0.6f, 0.2f, 1f);
+        public Vector4 OutlineColor = new(1f, 0.9f, 0.4f, 1f);
+        public float Thickness = 2f;
+        public bool DrawFill = true;
+        public bool DrawOutline = true;
         public float ProjectionHeight = 0f;
         public override string TypeName => "Line to target";
         public override void DrawUi()
         {
+            ImGui.Checkbox("Fill", ref DrawFill);
+            ImGui.SameLine();
+            ImGui.Checkbox("Outline", ref DrawOutline);
             ImGui.SliderFloat("Half width", ref HalfWidth, 0.05f, 5f);
+            ImGui.SliderFloat("Thickness", ref Thickness, 0.5f, 10f);
             ImGui.ColorEdit4("Color (center)", ref Color);
             ImGui.ColorEdit4("Color (edge)", ref OuterColor);
+            ImGui.ColorEdit4("Outline color", ref OutlineColor);
             ProjectionHeightSlider(ref ProjectionHeight);
             ImGui.TextUnformatted("Endpoint follows the current target.");
         }
@@ -292,7 +301,10 @@ public sealed class DemoWindow : Window, IDisposable
         {
             if (DemoPlugin.TargetManager.Target is not { } target) return;
             var p = baseParams with { ProjectionHeight = ProjectionHeight };
-            draw.AddLineFilled(Position, target.Position, HalfWidth, ToU32(Color), ToU32(OuterColor), p: p);
+            if (DrawFill)
+                draw.AddLineFilled(Position, target.Position, HalfWidth, ToU32(Color), ToU32(OuterColor), p: p);
+            if (DrawOutline)
+                draw.AddLine(Position, target.Position, HalfWidth, ToU32(OutlineColor), Thickness, p);
         }
     }
 
