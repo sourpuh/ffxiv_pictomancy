@@ -113,10 +113,13 @@ internal class RenderTarget : IDisposable
         ctx.Context.OutputMerger.SetTargets(_baseRTV);
     }
 
-    public void ExecuteFSP(RenderContext ctx, Texture2D backBuffer, FullScreenPass fsp)
+    public void ExecuteFSP(RenderContext ctx, Texture2D backBuffer, FullScreenPass fsp, ShaderResourceView? overrideMaskSRV = null)
     {
-        ValidateBackBufferResources(ctx.Device, backBuffer.Description);
-        ctx.Context.CopyResource(backBuffer, _backBufferCopy);
+        if (overrideMaskSRV == null)
+        {
+            ValidateBackBufferResources(ctx.Device, backBuffer.Description);
+            ctx.Context.CopyResource(backBuffer, _backBufferCopy);
+        }
 
         using var localBlend = new BlendState(ctx.Device, BlendStateDescription.Default());
         ctx.Context.OutputMerger.SetBlendState(localBlend);
@@ -124,7 +127,7 @@ internal class RenderTarget : IDisposable
         ctx.Context.ClearRenderTargetView(_processedRTV, new());
         ctx.Context.OutputMerger.SetTargets(_processedRTV);
 
-        fsp.Draw(ctx, _baseSRV, _backBufferSRV!);
+        fsp.Draw(ctx, _baseSRV, overrideMaskSRV ?? _backBufferSRV!);
     }
 
     private void ValidateBackBufferResources(Device device, Texture2DDescription backBufferDesc)

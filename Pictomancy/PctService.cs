@@ -19,6 +19,7 @@ public class PctService
     [PluginService] internal static IPluginLog Log { get; private set; }
     [PluginService] internal static ISigScanner SigScanner { get; private set; } = null!;
     [PluginService] internal static IFramework Framework { get; private set; } = null!;
+    [PluginService] internal static IGameInteropProvider HookProvider { get; private set; } = null!;
 
     private static DXRenderer? _dxRenderer;
     private static SceneDepth? _sceneDepth;
