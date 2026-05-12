@@ -1,5 +1,7 @@
+using System.Diagnostics;
 using System.Numerics;
 using Dalamud.Bindings.ImGui;
+using Dalamud.Interface.Utility;
 using Dalamud.Interface.Windowing;
 using Pictomancy;
 
@@ -10,37 +12,7 @@ public sealed class DemoWindow : Window, IDisposable
     // Master switch; when false, the plugin makes no Pictomancy calls.
     public bool WorldDrawEnabled = false;
 
-    // Drawing toggles
-    private bool _drawCircle = true;
-    private bool _drawCircleFilled = true;
-    private bool _drawDonut;
-    private bool _drawCone;
-    private bool _drawArc;
-    private bool _drawLineToTarget;
-    private bool _drawTextLabel;
-    private bool _drawDot;
-    private bool _drawTriangle;
-    private bool _drawClipZone;
-    private Vector4 _clipZoneRect = new(200, 200, 300, 200); // viewport-relative
-
-    // Sizes / params
-    private float _circleRadius = 5f;
-    private float _circleThickness = 2f;
-    private float _donutInner = 3f;
-    private float _donutOuter = 8f;
-    private float _coneRadius = 10f;
-    private float _coneAngleDeg = 90f;
-    private float _arcAngleDeg = 270f;
-    private float _lineHalfWidth = 0.5f;
-    private float _dotRadiusPx = 6f;
-    private string _label = "The joy of Pictomancy!";
-
-    // Colors (ABGR for ImGui packing)
-    private Vector4 _fillColor = new(1f, 0.4f, 0.2f, 0.35f);
-    private Vector4 _outlineColor = new(1f, 0.6f, 0.2f, 1f);
-    private Vector4 _accentColor = new(0.3f, 0.9f, 1f, 1f);
-
-    // Hints
+    // Hints (global)
     private int _autoDraw = (int)AutoDraw.ImGuiOverlay;
     private bool _drawInCutscene;
     private bool _drawWhenFaded;
@@ -51,10 +23,20 @@ public sealed class DemoWindow : Window, IDisposable
     private float _occlusionTolerance = 0.02f;
     private float _fadeStart = float.PositiveInfinity;
     private float _fadeStop = float.PositiveInfinity;
-    private float _projectionHeight = 0f;
 
-    public DemoWindow()
-        : base("Pictomancy Demo", ImGuiWindowFlags.AlwaysAutoResize)
+    // Spawned demo objects.
+    private readonly List<DemoObject> _objects = new();
+    private int _nextId = 1;
+
+    // Render-time graph: circular buffer of recent DrawWorld() durations in ms. The linear copy
+    // is rebuilt each Draw() because the ImGui binding does not expose values_offset.
+    private const int PlotSamples = 300;
+    private readonly float[] _renderMs = new float[PlotSamples];
+    private readonly float[] _renderMsLinear = new float[PlotSamples];
+    private int _renderMsIdx;
+    private readonly Stopwatch _renderSw = new();
+
+    public DemoWindow() : base("Pictomancy Demo", ImGuiWindowFlags.AlwaysAutoResize)
     {
         IsOpen = false;
     }
@@ -64,15 +46,27 @@ public sealed class DemoWindow : Window, IDisposable
     public override void Draw()
     {
         ImGui.Checkbox("Draw enabled (master switch)", ref WorldDrawEnabled);
+
+        float current = _renderMs[(_renderMsIdx - 1 + PlotSamples) % PlotSamples];
+        float peak = 0f;
+        for (int i = 0; i < PlotSamples; i++)
+        {
+            _renderMsLinear[i] = _renderMs[(_renderMsIdx + i) % PlotSamples];
+            if (_renderMsLinear[i] > peak) peak = _renderMsLinear[i];
+        }
+        ImGui.TextUnformatted($"Render: {current:F2} ms (peak {peak:F2} ms)");
+        ImGui.PlotLines("##rt", _renderMsLinear, PlotSamples, "", 0f, float.MaxValue, new Vector2(0, 60));
+
         ImGui.Separator();
 
-        if (DemoPlugin.Objects.LocalPlayer is null)
+        var player = DemoPlugin.Objects.LocalPlayer;
+        if (player is null)
         {
             ImGui.TextUnformatted("Log into the game to draw.");
             return;
         }
 
-        if (ImGui.CollapsingHeader("Hints", ImGuiTreeNodeFlags.DefaultOpen))
+        if (ImGui.CollapsingHeader("Hints"))
         {
             string[] autoDrawNames = Enum.GetNames(typeof(AutoDraw));
             ImGui.Combo("Auto draw", ref _autoDraw, autoDrawNames, autoDrawNames.Length);
@@ -91,47 +85,67 @@ public sealed class DemoWindow : Window, IDisposable
             ImGui.SliderFloat("Occlusion tolerance (m)", ref _occlusionTolerance, 0f, 5f);
             ImGui.SliderFloat("Fade start (m)", ref _fadeStart, 0f, 200f);
             ImGui.SliderFloat("Fade stop (m)", ref _fadeStop, 0f, 200f);
-            ImGui.SliderFloat("Projection height (m, 0 = off)", ref _projectionHeight, 0f, 10f);
         }
 
-        if (ImGui.CollapsingHeader("Shapes", ImGuiTreeNodeFlags.DefaultOpen))
-        {
-            ImGui.Checkbox("Circle (outline)", ref _drawCircle);
-            ImGui.Checkbox("Circle (filled)", ref _drawCircleFilled);
-            ImGui.Checkbox("Donut", ref _drawDonut);
-            ImGui.Checkbox("Cone (forward)", ref _drawCone);
-            ImGui.Checkbox("Arc", ref _drawArc);
-            ImGui.Checkbox("Line to target", ref _drawLineToTarget);
-            ImGui.Checkbox("Triangle", ref _drawTriangle);
-            ImGui.Checkbox("Dot at player", ref _drawDot);
-            ImGui.Checkbox("Text label above player", ref _drawTextLabel);
-            ImGui.Checkbox("Clip zone (rect)", ref _drawClipZone);
-        }
+        ImGui.TextUnformatted("Spawn at player position:");
+        var pos = player.Position;
+        var rotation = player.Rotation;
+        if (ImGui.Button("Fan")) Spawn(new FanObject { Position = pos, Rotation = rotation });
+        ImGui.SameLine();
+        if (ImGui.Button("Triangle")) Spawn(new TriangleObject { Position = pos, Rotation = rotation });
+        ImGui.SameLine();
+        if (ImGui.Button("Line to target")) Spawn(new LineObject { Position = pos });
+        if (ImGui.Button("Text")) Spawn(new TextObject { Position = pos });
+        ImGui.SameLine();
+        if (ImGui.Button("Dot")) Spawn(new DotObject { Position = pos });
+        ImGui.SameLine();
+        if (ImGui.Button("Clip zone")) Spawn(new ClipZoneObject());
+        ImGui.SameLine();
+        if (ImGui.Button("Clear all")) _objects.Clear();
 
-        if (ImGui.CollapsingHeader("Parameters"))
-        {
-            ImGui.SliderFloat("Circle radius", ref _circleRadius, 0.5f, 30f);
-            ImGui.SliderFloat("Circle thickness", ref _circleThickness, 0.5f, 10f);
-            ImGui.SliderFloat("Donut inner", ref _donutInner, 0f, 20f);
-            ImGui.SliderFloat("Donut outer", ref _donutOuter, 1f, 30f);
-            ImGui.SliderFloat("Cone radius", ref _coneRadius, 1f, 30f);
-            ImGui.SliderFloat("Cone angle (deg)", ref _coneAngleDeg, 5f, 360f);
-            ImGui.SliderFloat("Arc angle (deg)", ref _arcAngleDeg, 5f, 360f);
-            ImGui.SliderFloat("Line half-width", ref _lineHalfWidth, 0.05f, 5f);
-            ImGui.SliderFloat("Dot radius (px)", ref _dotRadiusPx, 1f, 30f);
-            ImGui.InputText("Label", ref _label, 64);
-            ImGui.SliderFloat4("Clip zone (x,y,w,h)", ref _clipZoneRect, 0f, 2000f);
-        }
+        ImGui.Separator();
+        ImGui.TextUnformatted($"Spawned objects ({_objects.Count}):");
 
-        if (ImGui.CollapsingHeader("Colors"))
+        int? toRemove = null;
+        for (int i = 0; i < _objects.Count; i++)
         {
-            ImGui.ColorEdit4("Fill", ref _fillColor);
-            ImGui.ColorEdit4("Outline", ref _outlineColor);
-            ImGui.ColorEdit4("Accent", ref _accentColor);
+            var obj = _objects[i];
+            ImGui.PushID(obj.Id);
+            string header = $"#{obj.Id} {obj.TypeName} @ ({obj.Position.X:F1}, {obj.Position.Y:F1}, {obj.Position.Z:F1})###obj{obj.Id}";
+            if (ImGui.CollapsingHeader(header))
+            {
+                obj.DrawUi();
+                if (ImGui.Button("Move to player")) obj.Position = pos;
+                ImGui.SameLine();
+                if (ImGui.Button("Remove")) toRemove = i;
+            }
+            ImGui.PopID();
         }
+        if (toRemove.HasValue) _objects.RemoveAt(toRemove.Value);
+    }
+
+    private void Spawn(DemoObject obj)
+    {
+        obj.Id = _nextId++;
+        _objects.Add(obj);
     }
 
     public void DrawWorld()
+    {
+        _renderSw.Restart();
+        try
+        {
+            DrawWorldInner();
+        }
+        finally
+        {
+            _renderSw.Stop();
+            _renderMs[_renderMsIdx] = (float)_renderSw.Elapsed.TotalMilliseconds;
+            _renderMsIdx = (_renderMsIdx + 1) % PlotSamples;
+        }
+    }
+
+    private void DrawWorldInner()
     {
         var player = DemoPlugin.Objects.LocalPlayer;
         if (player is null) return;
@@ -150,68 +164,196 @@ public sealed class DemoWindow : Window, IDisposable
                 OcclusionTolerance = _occlusionTolerance,
                 FadeStart = _fadeStart,
                 FadeStop = _fadeStop,
-                ProjectionHeight = _projectionHeight,
             },
         };
 
         using var draw = PctService.Draw(hints: hints);
         if (draw is null) return;
 
-        var origin = player.Position;
-        var forward = new Vector3(MathF.Sin(player.Rotation), 0, MathF.Cos(player.Rotation));
+        foreach (var obj in _objects)
+            obj.DrawWorld(draw, hints.DefaultParams);
+    }
 
-        var fill = ImGui.ColorConvertFloat4ToU32(_fillColor);
-        var outline = ImGui.ColorConvertFloat4ToU32(_outlineColor);
-        var accent = ImGui.ColorConvertFloat4ToU32(_accentColor);
+    private abstract class DemoObject
+    {
+        public int Id;
+        public Vector3 Position;
+        public abstract string TypeName { get; }
+        public abstract void DrawUi();
+        public abstract void DrawWorld(PctDrawList draw, PctDxParams baseParams);
+    }
 
-        if (_drawCircleFilled)
-            draw.AddCircleFilled(origin, _circleRadius, fill);
-        if (_drawCircle)
-            draw.AddCircle(origin, _circleRadius, outline, thickness: _circleThickness);
+    private static uint ToU32(Vector4 c) => ImGui.ColorConvertFloat4ToU32(c);
 
-        if (_drawDonut)
+    private static void ProjectionHeightSlider(ref float h)
+    {
+        ImGui.SliderFloat("Projection height (m, 0=off)", ref h, 0f, 10f);
+    }
+
+    private class FanObject : DemoObject
+    {
+        public float Rotation;
+        public float InnerRadius = 0f;
+        public float OuterRadius = 5f;
+        public float AngleDeg = 360f;
+        public int NumSegments = 0;
+        public float Thickness = 2f;
+        public Vector4 FillColor = new(1f, 0.4f, 0.2f, 0.35f);
+        public Vector4 FillOuterColor = new(1f, 0.4f, 0.2f, 0.35f);
+        public Vector4 OutlineColor = new(1f, 0.6f, 0.2f, 1f);
+        public bool DrawFill = true;
+        public bool DrawOutline = true;
+        public float ProjectionHeight = 0f;
+        public override string TypeName => "Fan";
+        public override void DrawUi()
         {
-            draw.AddFanFilled(origin, _donutInner, _donutOuter, 0, 2 * MathF.PI, fill);
-            draw.AddFan(origin, _donutInner, _donutOuter, 0, 2 * MathF.PI, outline, thickness: _circleThickness);
+            ImGui.Checkbox("Fill", ref DrawFill);
+            ImGui.SameLine();
+            ImGui.Checkbox("Outline", ref DrawOutline);
+            ImGui.SliderFloat("Inner radius", ref InnerRadius, 0f, 20f);
+            ImGui.SliderFloat("Outer radius", ref OuterRadius, 0.5f, 30f);
+            ImGui.SliderFloat("Angle (deg)", ref AngleDeg, 1f, 360f);
+            ImGui.SliderAngle("Rotation", ref Rotation);
+            ImGui.SliderInt("Segments (0 = auto)", ref NumSegments, 0, 128);
+            ImGui.SliderFloat("Thickness", ref Thickness, 0.5f, 10f);
+            ImGui.ColorEdit4("Fill color (inner)", ref FillColor);
+            ImGui.ColorEdit4("Fill color (outer)", ref FillOuterColor);
+            ImGui.ColorEdit4("Outline color", ref OutlineColor);
+            ProjectionHeightSlider(ref ProjectionHeight);
         }
-
-        if (_drawCone)
+        public override void DrawWorld(PctDrawList draw, PctDxParams baseParams)
         {
-            float half = MathF.PI * _coneAngleDeg / 360f;
-            draw.AddConeFilled(origin, _coneRadius, player.Rotation, MathF.PI * _coneAngleDeg / 180f, fill);
-            draw.AddFan(origin, 0, _coneRadius, player.Rotation - half, player.Rotation + half, outline, thickness: _circleThickness);
+            var p = baseParams with { ProjectionHeight = ProjectionHeight };
+            float half = MathF.PI * AngleDeg / 360f;
+            float minA = Rotation - half;
+            float maxA = Rotation + half;
+            uint segments = (uint)NumSegments;
+            if (DrawFill)
+                draw.AddFanFilled(Position, InnerRadius, OuterRadius, minA, maxA, ToU32(FillColor), ToU32(FillOuterColor), segments, p);
+            if (DrawOutline)
+                draw.AddFan(Position, InnerRadius, OuterRadius, minA, maxA, ToU32(OutlineColor), segments, Thickness, p);
         }
+    }
 
-        if (_drawArc)
+    private class TriangleObject : DemoObject
+    {
+        public float Rotation;
+        public float Reach = 6f;
+        public float HalfBase = 3f;
+        public float TiltA = 0f;
+        public float TiltB = 0f;
+        public float TiltC = 0f;
+        public Vector4 ColorA = new(0.3f, 0.9f, 1f, 0.6f);
+        public Vector4 ColorB = new(0.3f, 0.9f, 1f, 0.6f);
+        public Vector4 ColorC = new(0.3f, 0.9f, 1f, 0.6f);
+        public float ProjectionHeight = 0f;
+        public override string TypeName => "Triangle";
+        public override void DrawUi()
         {
-            float half = MathF.PI * _arcAngleDeg / 360f;
-            draw.AddArc(origin, _circleRadius, -half, half, accent, thickness: _circleThickness);
+            ImGui.SliderFloat("Reach", ref Reach, 1f, 30f);
+            ImGui.SliderFloat("Half base", ref HalfBase, 0.5f, 20f);
+            ImGui.SliderAngle("Rotation", ref Rotation);
+            ImGui.SliderFloat("Tilt A (tip)", ref TiltA, -5f, 5f);
+            ImGui.SliderFloat("Tilt B (right)", ref TiltB, -5f, 5f);
+            ImGui.SliderFloat("Tilt C (left)", ref TiltC, -5f, 5f);
+            ImGui.ColorEdit4("Color A (tip)", ref ColorA);
+            ImGui.ColorEdit4("Color B (right)", ref ColorB);
+            ImGui.ColorEdit4("Color C (left)", ref ColorC);
+            ProjectionHeightSlider(ref ProjectionHeight);
         }
-
-        if (_drawLineToTarget && DemoPlugin.TargetManager.Target is { } target)
+        public override void DrawWorld(PctDrawList draw, PctDxParams baseParams)
         {
-            draw.AddLineFilled(origin, target.Position, _lineHalfWidth, fill, accent);
+            var p = baseParams with { ProjectionHeight = ProjectionHeight };
+            var fwd = new Vector3(MathF.Sin(Rotation), 0, MathF.Cos(Rotation));
+            var right = Vector3.Cross(fwd, Vector3.UnitY);
+            var a = Position + fwd * Reach + Vector3.UnitY * TiltA;
+            var b = Position + fwd * (Reach * 0.5f) + right * HalfBase + Vector3.UnitY * TiltB;
+            var c = Position + fwd * (Reach * 0.5f) - right * HalfBase + Vector3.UnitY * TiltC;
+            draw.AddTriangleFilled(a, b, c, ToU32(ColorA), ToU32(ColorB), ToU32(ColorC), p: p);
         }
+    }
 
-        if (_drawTriangle)
+    private class LineObject : DemoObject
+    {
+        public float HalfWidth = 0.5f;
+        public Vector4 Color = new(1f, 0.6f, 0.2f, 1f);
+        public Vector4 OuterColor = new(1f, 0.6f, 0.2f, 1f);
+        public float ProjectionHeight = 0f;
+        public override string TypeName => "Line to target";
+        public override void DrawUi()
         {
-            var a = origin + forward * 6f;
-            var b = origin + forward * 3f + Vector3.Cross(forward, Vector3.UnitY) * 3f;
-            var c = origin + forward * 3f - Vector3.Cross(forward, Vector3.UnitY) * 3f;
-            draw.AddTriangleFilled(a, b, c, accent);
+            ImGui.SliderFloat("Half width", ref HalfWidth, 0.05f, 5f);
+            ImGui.ColorEdit4("Color (center)", ref Color);
+            ImGui.ColorEdit4("Color (edge)", ref OuterColor);
+            ProjectionHeightSlider(ref ProjectionHeight);
+            ImGui.TextUnformatted("Endpoint follows the current target.");
         }
-
-        if (_drawDot)
-            draw.AddDot(origin, _dotRadiusPx, accent);
-
-        if (_drawTextLabel)
-            draw.AddText(origin + new Vector3(0, 2.5f, 0), accent, _label);
-
-        if (_drawClipZone)
+        public override void DrawWorld(PctDrawList draw, PctDxParams baseParams)
         {
-            var min = new Vector2(_clipZoneRect.X, _clipZoneRect.Y);
-            var max = min + new Vector2(_clipZoneRect.Z, _clipZoneRect.W);
-            draw.AddClipZone(min, max);
+            if (DemoPlugin.TargetManager.Target is not { } target) return;
+            var p = baseParams with { ProjectionHeight = ProjectionHeight };
+            draw.AddLineFilled(Position, target.Position, HalfWidth, ToU32(Color), ToU32(OuterColor), p: p);
+        }
+    }
+
+    private class TextObject : DemoObject
+    {
+        public string Label = "The joy of Pictomancy!";
+        public float Scale = 1f;
+        public float HeightOffset = 2.5f;
+        public Vector4 Color = new(0.3f, 0.9f, 1f, 1f);
+        public override string TypeName => "Text";
+        public override void DrawUi()
+        {
+            ImGui.InputText("Label", ref Label, 64);
+            ImGui.SliderFloat("Scale", ref Scale, 0.1f, 8f);
+            ImGui.SliderFloat("Height offset", ref HeightOffset, 0f, 5f);
+            ImGui.ColorEdit4("Color", ref Color);
+        }
+        public override void DrawWorld(PctDrawList draw, PctDxParams baseParams)
+        {
+            draw.AddText(Position + new Vector3(0, HeightOffset, 0), ToU32(Color), Label, Scale);
+        }
+    }
+
+    private class DotObject : DemoObject
+    {
+        public float RadiusPx = 6f;
+        public Vector4 Color = new(0.3f, 0.9f, 1f, 1f);
+        public override string TypeName => "Dot";
+        public override void DrawUi()
+        {
+            ImGui.SliderFloat("Radius (px)", ref RadiusPx, 1f, 30f);
+            ImGui.ColorEdit4("Color", ref Color);
+        }
+        public override void DrawWorld(PctDrawList draw, PctDxParams baseParams)
+        {
+            draw.AddDot(Position, RadiusPx, ToU32(Color));
+        }
+    }
+
+    private class ClipZoneObject : DemoObject
+    {
+        public Vector2 Min = new(400, 300);
+        public Vector2 Max = new(800, 500);
+        public bool ShowOutline = true;
+        public override string TypeName => "Clip zone";
+        public override void DrawUi()
+        {
+            var vp = ImGuiHelpers.MainViewport.Size;
+            float maxExtent = MathF.Max(vp.X, vp.Y);
+            ImGui.SliderFloat2("Min (px)", ref Min, 0f, maxExtent);
+            ImGui.SliderFloat2("Max (px)", ref Max, 0f, maxExtent);
+            ImGui.Checkbox("Show outline", ref ShowOutline);
+        }
+        public override void DrawWorld(PctDrawList draw, PctDxParams baseParams)
+        {
+            draw.AddClipZone(Min, Max);
+            if (ShowOutline)
+            {
+                var vpPos = ImGuiHelpers.MainViewport.Pos;
+                ImGui.GetForegroundDrawList().AddRect(vpPos + Min, vpPos + Max, 0xFF00FFFF);
+            }
         }
     }
 }
