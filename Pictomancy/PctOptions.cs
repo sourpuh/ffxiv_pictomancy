@@ -30,4 +30,7 @@ public sealed class PctOptions
 
     /// <summary>Max clip-zone rectangles drawn per frame.</summary>
     public int MaxClipZones { get; init; } = 1024;
+
+    /// <summary>Max sphere instances drawn per frame.</summary>
+    public int MaxSpheres { get; init; } = 256;
 }

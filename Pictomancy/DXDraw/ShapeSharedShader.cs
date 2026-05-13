@@ -14,9 +14,6 @@ internal static class ShapeSharedShader
         static const float HEIGHT_FADE_BAND = 0.2;
         // Divide-by-zero guard for fade / height / half-extent denominators.
         static const float DIVIDE_EPS = 1e-4;
-        // Fresnel rim shading parameters.
-        static const float RIM_FALLOFF_POW = 4.0;
-        static const float RIM_INTENSITY = 0.6;
 
         Texture2D<float4> _sceneDepth : register(t0);
         Texture2D<float4> _sceneInfo : register(t1);
@@ -71,6 +68,17 @@ internal static class ShapeSharedShader
 
             return color;
         }
+
+        float4 applyFresnelRim(float4 color, float3 N, float3 V, float3 fresnelParams, float extraRim)
+        {
+            float spread = fresnelParams.x;
+            float angular = (spread > 0.0) ? pow(1.0 - saturate(abs(dot(N, V))), 1.0 / spread) : 0.0;
+            float rim = max(angular, extraRim);
+            float rimAlpha = rim * fresnelParams.z;
+            color.rgb += rimAlpha * fresnelParams.y;
+            color.a = saturate(color.a + rimAlpha);
+            return color;
+        }
         """;
 
     // Requires cbuffer fields: `renderTargetSize`, `invViewProj`, `cameraPos`, plus Mixin's.
@@ -92,14 +100,12 @@ internal static class ShapeSharedShader
             return worldH.xyz / worldH.w;
         }
 
-        float4 applyFresnelRim(float4 color, float2 uv, float3 world)
+        // Scene-sampled wrapper for projected shapes: derives N from the scene normal buffer and V from cameraPos
+        float4 applyFresnelRim(float4 color, float2 uv, float3 world, float3 fresnelParams)
         {
-            // Normal is packed [0,1]; decode to [-1,1].
             float3 N = normalize(_sceneNormal.Sample(_sceneSampler, uv).rgb * 2.0 - 1.0);
             float3 V = normalize(cameraPos - world);
-            float rim = pow(1.0 - saturate(abs(dot(N, V))), RIM_FALLOFF_POW);
-            color.rgb += rim * RIM_INTENSITY;
-            return color;
+            return applyFresnelRim(color, N, V, fresnelParams, 0.0);
         }
         """;
 }

@@ -15,6 +15,7 @@ internal class DXRenderer : IDisposable
     public ProjectedFanFill? ProjectedFanFill { get; init; }
     public ProjectedTriFill? ProjectedTriFill { get; init; }
     public Stroke? Stroke { get; init; }
+    public Sphere? Sphere { get; init; }
     public FullScreenPass FSP { get; init; }
     public ClipZone ClipZone { get; init; }
     public UIMaskCapture? UIMaskCapture { get; private set; }
@@ -77,6 +78,14 @@ internal class DXRenderer : IDisposable
         {
             PctService.Log.Error(e, "[Pictomancy] Failed to compile stroke shader; starting in degraded mode.");
         }
+        try
+        {
+            Sphere = new(RenderContext, options.MaxSpheres);
+        }
+        catch (Exception e)
+        {
+            PctService.Log.Error(e, "[Pictomancy] Failed to compile sphere shader; sphere draws will be skipped.");
+        }
 
         // TriFill's buffer doubles as the fan-fallback path's storage in degraded mode.
         TriFill = new(RenderContext, options.MaxTriangleVertices + (FanDegraded ? options.MaxFans * 360 : 0));
@@ -135,6 +144,7 @@ internal class DXRenderer : IDisposable
         ProjectedFanFill?.Dispose();
         ProjectedTriFill?.Dispose();
         Stroke?.Dispose();
+        Sphere?.Dispose();
         ClipZone.Dispose();
         FSP.Dispose();
         UIMaskCapture?.Dispose();
@@ -188,7 +198,7 @@ internal class DXRenderer : IDisposable
         TriFill.UpdateConstants(new() { ViewProj = ViewProj, PixelToUv = pixelToUv });
         FanFill?.UpdateConstants(new() { ViewProj = ViewProj, PixelToUv = pixelToUv });
         Stroke?.UpdateConstants(new() { ViewProj = ViewProj, RenderTargetSize = rtSize, PixelToUv = pixelToUv });
-        if (ProjectedFanFill?.HasPending == true || ProjectedTriFill?.HasPending == true)
+        if (ProjectedFanFill?.HasPending == true || ProjectedTriFill?.HasPending == true || Sphere?.HasPending == true)
         {
             var invViewProj = ViewProj;
             invViewProj.Invert();
@@ -217,9 +227,20 @@ internal class DXRenderer : IDisposable
                     CameraPos = cameraPos,
                 });
             }
+            if (Sphere?.HasPending == true)
+            {
+                Sphere.UpdateConstants(new()
+                {
+                    ViewProj = ViewProj,
+                    InvViewProj = invViewProj,
+                    RenderTargetSize = rtSize,
+                    PixelToUv = pixelToUv,
+                    CameraPos = cameraPos,
+                });
+            }
         }
 
-        bool hasShapes = TriFill.HasPending || FanFill?.HasPending == true || ProjectedFanFill?.HasPending == true || ProjectedTriFill?.HasPending == true || Stroke?.HasPending == true;
+        bool hasShapes = TriFill.HasPending || FanFill?.HasPending == true || ProjectedFanFill?.HasPending == true || ProjectedTriFill?.HasPending == true || Stroke?.HasPending == true || Sphere?.HasPending == true;
         if (hasShapes && sceneDepthSRV != null)
         {
             // DSV-only target with cleared stencil for the clip-zone pass.
@@ -245,6 +266,7 @@ internal class DXRenderer : IDisposable
         FlushProjectedInOrder();
         TriFill.Flush();
         FanFill?.Flush();
+        Sphere?.Flush();
         Stroke?.Flush();
 
         var device = Device.Instance();
@@ -388,6 +410,11 @@ internal class DXRenderer : IDisposable
     public void DrawStroke(IEnumerable<Vector3> world, float thickness, uint color, bool closed, PctDxParams p)
     {
         Stroke?.Add(world.ToArray(), thickness, color, closed, p);
+    }
+
+    public void DrawSphere(Vector3 center, float radius, uint color, PctDxParams p)
+    {
+        Sphere?.Add(center, radius, color, p);
     }
 
     private static unsafe SharpDX.Matrix ReadMatrix(IntPtr address)

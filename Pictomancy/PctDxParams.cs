@@ -39,5 +39,20 @@ public record struct PctDxParams
     /// </summary>
     public float ProjectionHeight { get; init; } = 0f;
 
+    /// <summary>
+    /// Fresnel rim spread. 0 = no rim; lower = tighter angles; higher = looser angles.
+    /// </summary>
+    public float FresnelSpread { get; init; } = 0.25f;
+
+    /// <summary>
+    /// Fresnel rim RGB intensity. Lower = uses more color; higher = uses more white.
+    /// </summary>
+    public float FresnelIntensity { get; init; } = 0.5f;
+
+    /// <summary>
+    /// Fresnel rim opacity. This is independent of the color's alpha.
+    /// </summary>
+    public float FresnelOpacity { get; init; } = 0.3f;
+
     public PctDxParams() { }
 }

@@ -36,6 +36,7 @@ internal class ProjectedTriFill : IDisposable
         public float ProjectionHeight;
         public float FadeStart;
         public float FadeStop;
+        public Vector3 FresnelParams;
     }
 
     private class Data : IDisposable
@@ -76,6 +77,7 @@ internal class ProjectedTriFill : IDisposable
                     ProjectionHeight = p.ProjectionHeight,
                     FadeStart = p.FadeStart,
                     FadeStop = p.FadeStop,
+                    FresnelParams = new Vector3(p.FresnelSpread, p.FresnelIntensity, p.FresnelOpacity),
                 });
             }
         }
@@ -143,6 +145,7 @@ internal class ProjectedTriFill : IDisposable
                 float3 aaMask : AAMASK;
                 float projectionHeight : HEIGHT;
                 float2 fadeParams : FADEPARAMS;
+                float3 fresnelParams : FRESNELPARAMS;
             };
 
             struct VSOutput
@@ -157,6 +160,7 @@ internal class ProjectedTriFill : IDisposable
                 nointerpolation float4 colorC : COLOR2;
                 nointerpolation float3 aaMask : AAMASK;
                 nointerpolation float2 fadeParams : FADEPARAMS;
+                nointerpolation float3 fresnelParams : FRESNELPARAMS;
             };
 
             static const uint PRISM_LIST[24] = {
@@ -190,6 +194,7 @@ internal class ProjectedTriFill : IDisposable
                 o.colorC = instance.colorC;
                 o.fadeParams = instance.fadeParams;
                 o.aaMask = instance.aaMask;
+                o.fresnelParams = instance.fresnelParams;
                 return o;
             }
 
@@ -234,7 +239,7 @@ internal class ProjectedTriFill : IDisposable
 
                 float4 color = input.colorA * bu + input.colorB * bv + input.colorC * bw;
                 color.a *= edgeAlpha * heightAlpha;
-                color = applyFresnelRim(color, uv, world);
+                color = applyFresnelRim(color, uv, world, input.fresnelParams);
                 color = applyDistanceFade(color, sceneNdcZ, input.fadeParams);
 
                 return color;
@@ -265,6 +270,7 @@ internal class ProjectedTriFill : IDisposable
             new InputElement("AAMASK", 0, Format.R32G32B32_Float, -1, 0, InputClassification.PerInstanceData, 1),
             new InputElement("HEIGHT", 0, Format.R32_Float, -1, 0, InputClassification.PerInstanceData, 1),
             new InputElement("FADEPARAMS", 0, Format.R32G32_Float, -1, 0, InputClassification.PerInstanceData, 1),
+            new InputElement("FRESNELPARAMS", 0, Format.R32G32B32_Float, -1, 0, InputClassification.PerInstanceData, 1),
         ]);
 
         var rsDesc = RasterizerStateDescription.Default();

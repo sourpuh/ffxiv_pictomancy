@@ -308,4 +308,13 @@ public class PctDrawList : IDisposable
     {
         _renderer.DrawFan(origin, innerRadius, outerRadius, minAngle, maxAngle, color, outerColor ?? color, numSegments, p ?? DefaultParams);
     }
+
+    /// <summary>
+    /// Draw a 3D sphere in world space with fresnel effect on the sphere and its contents.
+    /// Occlusion, distance fade, and fresnel all come from <see cref="PctDxParams"/>.
+    /// </summary>
+    public void AddSphere(Vector3 origin, float radius, uint color, PctDxParams? p = null)
+    {
+        _renderer.DrawSphere(origin, radius, color, p ?? DefaultParams);
+    }
 }

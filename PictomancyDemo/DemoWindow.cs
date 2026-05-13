@@ -101,6 +101,8 @@ public sealed class DemoWindow : Window, IDisposable
         ImGui.SameLine();
         if (ImGui.Button("Clip zone")) Spawn(new ClipZoneObject());
         ImGui.SameLine();
+        if (ImGui.Button("Sphere")) Spawn(new SphereObject { Position = pos });
+        ImGui.SameLine();
         if (ImGui.Button("Clear all")) _objects.Clear();
 
         ImGui.Separator();
@@ -190,6 +192,28 @@ public sealed class DemoWindow : Window, IDisposable
         ImGui.SliderFloat("Projection height (m, 0=off)", ref h, 0f, 10f);
     }
 
+    private struct FresnelControls
+    {
+        public float Spread;
+        public float Intensity;
+        public float Opacity;
+        public FresnelControls() { Spread = 0.25f; Intensity = 0.5f; Opacity = 0.3f; }
+
+        public void DrawUi()
+        {
+            ImGui.SliderFloat("Fresnel spread (0 = no rim)", ref Spread, 0f, 2f);
+            ImGui.SliderFloat("Fresnel intensity (rgb)", ref Intensity, 0f, 2f);
+            ImGui.SliderFloat("Fresnel opacity (alpha)", ref Opacity, 0f, 1f);
+        }
+
+        public readonly PctDxParams Apply(PctDxParams p) => p with
+        {
+            FresnelSpread = Spread,
+            FresnelIntensity = Intensity,
+            FresnelOpacity = Opacity,
+        };
+    }
+
     private class FanObject : DemoObject
     {
         public float Rotation;
@@ -204,6 +228,7 @@ public sealed class DemoWindow : Window, IDisposable
         public bool DrawFill = true;
         public bool DrawOutline = true;
         public float ProjectionHeight = 0f;
+        public FresnelControls Fresnel = new();
         public override string TypeName => "Fan";
         public override void DrawUi()
         {
@@ -220,10 +245,11 @@ public sealed class DemoWindow : Window, IDisposable
             ImGui.ColorEdit4("Fill color (outer)", ref FillOuterColor);
             ImGui.ColorEdit4("Outline color", ref OutlineColor);
             ProjectionHeightSlider(ref ProjectionHeight);
+            Fresnel.DrawUi();
         }
         public override void DrawWorld(PctDrawList draw, PctDxParams baseParams)
         {
-            var p = baseParams with { ProjectionHeight = ProjectionHeight };
+            var p = Fresnel.Apply(baseParams) with { ProjectionHeight = ProjectionHeight };
             float half = MathF.PI * AngleDeg / 360f;
             float minA = Rotation - half;
             float maxA = Rotation + half;
@@ -247,6 +273,7 @@ public sealed class DemoWindow : Window, IDisposable
         public Vector4 ColorB = new(0.3f, 0.9f, 1f, 0.6f);
         public Vector4 ColorC = new(0.3f, 0.9f, 1f, 0.6f);
         public float ProjectionHeight = 0f;
+        public FresnelControls Fresnel = new();
         public override string TypeName => "Triangle";
         public override void DrawUi()
         {
@@ -260,10 +287,11 @@ public sealed class DemoWindow : Window, IDisposable
             ImGui.ColorEdit4("Color B (right)", ref ColorB);
             ImGui.ColorEdit4("Color C (left)", ref ColorC);
             ProjectionHeightSlider(ref ProjectionHeight);
+            Fresnel.DrawUi();
         }
         public override void DrawWorld(PctDrawList draw, PctDxParams baseParams)
         {
-            var p = baseParams with { ProjectionHeight = ProjectionHeight };
+            var p = Fresnel.Apply(baseParams) with { ProjectionHeight = ProjectionHeight };
             var fwd = new Vector3(MathF.Sin(Rotation), 0, MathF.Cos(Rotation));
             var right = Vector3.Cross(fwd, Vector3.UnitY);
             var a = Position + fwd * Reach + Vector3.UnitY * TiltA;
@@ -283,6 +311,7 @@ public sealed class DemoWindow : Window, IDisposable
         public bool DrawFill = true;
         public bool DrawOutline = true;
         public float ProjectionHeight = 0f;
+        public FresnelControls Fresnel = new();
         public override string TypeName => "Line to target";
         public override void DrawUi()
         {
@@ -295,12 +324,13 @@ public sealed class DemoWindow : Window, IDisposable
             ImGui.ColorEdit4("Color (edge)", ref OuterColor);
             ImGui.ColorEdit4("Outline color", ref OutlineColor);
             ProjectionHeightSlider(ref ProjectionHeight);
+            Fresnel.DrawUi();
             ImGui.TextUnformatted("Endpoint follows the current target.");
         }
         public override void DrawWorld(PctDrawList draw, PctDxParams baseParams)
         {
             if (DemoPlugin.TargetManager.Target is not { } target) return;
-            var p = baseParams with { ProjectionHeight = ProjectionHeight };
+            var p = Fresnel.Apply(baseParams) with { ProjectionHeight = ProjectionHeight };
             if (DrawFill)
                 draw.AddLineFilled(Position, target.Position, HalfWidth, ToU32(Color), ToU32(OuterColor), p: p);
             if (DrawOutline)
@@ -341,6 +371,27 @@ public sealed class DemoWindow : Window, IDisposable
         public override void DrawWorld(PctDrawList draw, PctDxParams baseParams)
         {
             draw.AddDot(Position, RadiusPx, ToU32(Color));
+        }
+    }
+
+    // 3D sphere at the spawn position, lifted to player chest height by default.
+    private class SphereObject : DemoObject
+    {
+        public float Radius = 2f;
+        public float HeightOffset = 1f;
+        public Vector4 Color = new(0.4f, 0.7f, 1f, 0.5f);
+        public FresnelControls Fresnel = new() { Opacity = 0.6f };
+        public override string TypeName => "Sphere";
+        public override void DrawUi()
+        {
+            ImGui.SliderFloat("Radius (m)", ref Radius, 0.1f, 30f);
+            ImGui.SliderFloat("Height offset (m)", ref HeightOffset, 0f, 10f);
+            ImGui.ColorEdit4("Color", ref Color);
+            Fresnel.DrawUi();
+        }
+        public override void DrawWorld(PctDrawList draw, PctDxParams baseParams)
+        {
+            draw.AddSphere(Position + new Vector3(0, HeightOffset, 0), Radius, ToU32(Color), Fresnel.Apply(baseParams));
         }
     }
 

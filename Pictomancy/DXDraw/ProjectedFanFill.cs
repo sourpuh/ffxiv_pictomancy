@@ -35,6 +35,7 @@ internal class ProjectedFanFill : IDisposable
         public float ProjectionHeight;
         public float FadeStart;
         public float FadeStop;
+        public Vector3 FresnelParams;
     }
 
     private class Data : IDisposable
@@ -66,6 +67,7 @@ internal class ProjectedFanFill : IDisposable
                     ProjectionHeight = p.ProjectionHeight,
                     FadeStart = p.FadeStart,
                     FadeStop = p.FadeStop,
+                    FresnelParams = new Vector3(p.FresnelSpread, p.FresnelIntensity, p.FresnelOpacity),
                 });
         }
 
@@ -133,6 +135,7 @@ internal class ProjectedFanFill : IDisposable
                 float4 colorEnd : INSTANCECOLOR1;
                 float projectionHeight : HEIGHT;
                 float2 fadeParams : FADEPARAMS;
+                float3 fresnelParams : FRESNELPARAMS;
             };
 
             struct VSOutput
@@ -144,6 +147,7 @@ internal class ProjectedFanFill : IDisposable
                 nointerpolation float4 colorOrigin : COLOR0;
                 nointerpolation float4 colorEnd : COLOR1;
                 nointerpolation float2 fadeParams : FADEPARAMS;
+                nointerpolation float3 fresnelParams : FRESNELPARAMS;
             };
 
             static const uint BOX_LIST[36] = {
@@ -175,6 +179,7 @@ internal class ProjectedFanFill : IDisposable
                 o.colorOrigin = instance.colorOrigin;
                 o.colorEnd = instance.colorEnd;
                 o.fadeParams = instance.fadeParams;
+                o.fresnelParams = instance.fresnelParams;
                 return o;
             }
 
@@ -220,7 +225,7 @@ internal class ProjectedFanFill : IDisposable
                 float t = (outerR > innerR) ? saturate((r - innerR) / (outerR - innerR)) : 0.0;
                 float4 color = lerp(input.colorOrigin, input.colorEnd, t);
                 color.a *= radiusAlpha * angleAlpha * heightAlpha;
-                color = applyFresnelRim(color, uv, world);
+                color = applyFresnelRim(color, uv, world, input.fresnelParams);
                 color = applyDistanceFade(color, sceneNdcZ, input.fadeParams);
 
                 return color;
@@ -247,6 +252,7 @@ internal class ProjectedFanFill : IDisposable
             new InputElement("INSTANCECOLOR", 1, Format.R32G32B32A32_Float, -1, 0, InputClassification.PerInstanceData, 1),
             new InputElement("HEIGHT", 0, Format.R32_Float, -1, 0, InputClassification.PerInstanceData, 1),
             new InputElement("FADEPARAMS", 0, Format.R32G32_Float, -1, 0, InputClassification.PerInstanceData, 1),
+            new InputElement("FRESNELPARAMS", 0, Format.R32G32B32_Float, -1, 0, InputClassification.PerInstanceData, 1),
         ]);
 
         var rsDesc = RasterizerStateDescription.Default();
