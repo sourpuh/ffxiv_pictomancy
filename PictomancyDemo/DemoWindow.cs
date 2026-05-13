@@ -18,7 +18,7 @@ public sealed class DemoWindow : Window, IDisposable
     private bool _drawWhenFaded;
     private int _maxAlpha = 255;
     private int _blendMode = (int)AlphaBlendMode.Add;
-    private int _uiMask = (int)UIMask.BackbufferSubtraction;
+    private int _uiMask = (int)UIMask.BackbufferAlpha;
     private float _occludedAlpha = 0f;
     private float _occlusionTolerance = 0.02f;
     private float _fadeStart = float.PositiveInfinity;
