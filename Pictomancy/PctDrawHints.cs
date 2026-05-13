@@ -31,7 +31,7 @@ public record struct PctDrawHints
     /// <summary>
     /// How to mask pictomancy output with the game's UI. Check UIMask file for descriptions.
     /// </summary>
-    public UIMask UIMask { get; init; } = UIMask.BackbufferSubtraction;
+    public UIMask UIMask { get; init; } = UIMask.BackbufferAlpha;
 
     /// <summary>
     /// Default per-shape rendering params (occlusion fade, distance fade) applied to any shape
