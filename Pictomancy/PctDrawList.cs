@@ -8,8 +8,9 @@ namespace Pictomancy;
 public class PctDrawList : IDisposable
 {
     internal readonly ImDrawListPtr _drawList;
-    internal readonly ImDrawListPtr _textDrawList;
     internal readonly List<Vector3> _path;
+    private readonly List<(Vector3 worldPos, uint color, string text, float scale)> _textQueue = new();
+    private readonly List<(Vector3 worldPos, float radiusPixels, uint color, uint numSegments)> _dotQueue = new();
     internal readonly DXRenderer _renderer;
     internal readonly SceneDepth _sceneDepth;
     internal readonly SceneInfo _sceneInfo;
@@ -28,7 +29,7 @@ public class PctDrawList : IDisposable
         DefaultParams = defaultParams ?? new PctDxParams();
         if (drawlist != null)
         {
-            _drawList = _textDrawList = (ImDrawListPtr)drawlist;
+            _drawList = (ImDrawListPtr)drawlist;
         }
         else
         {
@@ -40,12 +41,8 @@ public class PctDrawList : IDisposable
             if (ImGui.Begin("PctWindow#" + PctService.PluginInterface.InternalName, ImGuiWindowFlags.NoInputs | ImGuiWindowFlags.NoNav | ImGuiWindowFlags.NoTitleBar | ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoBackground | ImGuiWindowFlags.AlwaysUseWindowPadding | ImGuiWindowFlags.NoSavedSettings | ImGuiWindowFlags.NoFocusOnAppearing))
             {
                 CImGui.igBringWindowToDisplayBack(CImGui.igGetCurrentWindow());
-                _textDrawList = ImGui.GetWindowDrawList();
+                _drawList = ImGui.GetWindowDrawList();
                 isMyWindow = true;
-            }
-            else
-            {
-                _textDrawList = ImGui.GetBackgroundDrawList();
             }
             ImGui.PopStyleVar();
         }
@@ -99,13 +96,34 @@ public class PctDrawList : IDisposable
                 break;
         }
 
+        if (PctService.Hints.AutoDraw is not AutoDraw.None)
+        {
+            foreach (var (worldPos, radiusPixels, color, numSegments) in _dotQueue)
+            {
+                if (!PctService.GameGui.WorldToScreen(worldPos, out var position2D))
+                    continue;
+                _drawList.AddCircleFilled(position2D, radiusPixels, color, (int)numSegments);
+            }
+            foreach (var (worldPos, color, text, scale) in _textQueue)
+            {
+                if (!PctService.GameGui.WorldToScreen(worldPos, out var position2D))
+                    continue;
+                ImGui.SetWindowFontScale(scale);
+                var textPosition = position2D - (ImGui.CalcTextSize(text) / 2f);
+                _drawList.AddText(textPosition, color, text);
+                ImGui.SetWindowFontScale(1f);
+            }
+        }
+        _dotQueue.Clear();
+        _textQueue.Clear();
+
         if (isMyWindow)
             ImGui.End();
     }
 
     /// <summary>
     /// Add text to a position in world space using default font and size.
-    /// Currently uses Imgui to draw thus is not clipped.
+    /// Currently uses Imgui to draw thus is not clipped or drawn without AutoDraw.
     /// </summary>
     /// <param name="position">Position in world space</param>
     /// <param name="color">Text color</param>
@@ -113,19 +131,12 @@ public class PctDrawList : IDisposable
     /// <param name="scale">Scale to draw; looks bad when using high numbers; let me know if you actually want that fixed.</param>
     public void AddText(Vector3 position, uint color, string text, float scale = 1)
     {
-        if (!PctService.GameGui.WorldToScreen(position, out var position2D))
-        {
-            return;
-        }
-        ImGui.SetWindowFontScale(scale);
-        var textPosition = position2D - (ImGui.CalcTextSize(text) / 2f);
-        _textDrawList.AddText(textPosition, color, text);
-        ImGui.SetWindowFontScale(1f);
+        _textQueue.Add((position, color, text, scale));
     }
 
     /// <summary>
     /// Add dot to a position in world space.
-    /// Currently uses Imgui to draw thus is not clipped.
+    /// Currently uses Imgui to draw thus is not clipped or drawn without AutoDraw.
     /// </summary>
     /// <param name="position">Position in world space</param>
     /// <param name="radiusPixels">Dot radius in pixels</param>
@@ -133,11 +144,7 @@ public class PctDrawList : IDisposable
     /// <param name="numSegments">Number of segments used to draw dot</param>
     public void AddDot(Vector3 position, float radiusPixels, uint color, uint numSegments = 0)
     {
-        if (!PctService.GameGui.WorldToScreen(position, out var position2D))
-        {
-            return;
-        }
-        _drawList.AddCircleFilled(position2D, radiusPixels, color, (int)numSegments);
+        _dotQueue.Add((position, radiusPixels, color, numSegments));
     }
 
     /// <summary>

@@ -160,9 +160,9 @@ internal class DXRenderer : IDisposable
         }
 
         bool useMask = PctService.Hints.UIMask is UIMask.BackbufferAlpha or UIMask.BackbufferSubtraction
-            && PctService.Hints.AutoDraw != AutoDraw.NativeOverlay;
+            && PctService.Hints.AutoDraw is not AutoDraw.NativeOverlay;
 
-        if (useMask && PctService.Hints.UIMask == UIMask.BackbufferSubtraction)
+        if (useMask && PctService.Hints.UIMask is UIMask.BackbufferSubtraction)
         {
             UIMaskCapture?.BeginFrame();
         }

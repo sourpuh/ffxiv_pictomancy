@@ -40,7 +40,7 @@ public void Dispose()
 `Initialize()` accepts an optional `PctOptions` object which can disable specific renderers or adjust DX buffer sizes.
 
 ### Primitives
-Pictomancy overlay drawing supports three primitive types: Strokes, Fans, and Triangles.
+Pictomancy overlay drawing supports three primitive types: Strokes, Fans, and Triangles
 * Strokes are connected line segments with a pixel thickness.
     * `AddCircle` uses the Stroke primitive to draw a circle outline.
     * `PathLineTo`, `PathArcTo`, and `PathStroke` can be used to draw arbitrary lines.
@@ -50,6 +50,13 @@ Pictomancy overlay drawing supports three primitive types: Strokes, Fans, and Tr
     * `AddQuadFilled` uses two Triangle primitives to draw a filled quadrilateral.
 
 Fans and Triangles may be projected onto the world and support color interpolation.
+
+Pictomancy also supports drawing text and dots at world positions.
+These currently do not use the pictomancy renderer; they fall back to ImGui drawing functions.
+As such they have a few limitations:
+* No UI masking
+* No Occlusion / Depth testing
+* Not drawn if AutoDraw is disabled
 
 ### Drawing an ImGui overlay with DirectX Renderer
 ```c#
