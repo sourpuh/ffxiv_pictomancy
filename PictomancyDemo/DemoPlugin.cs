@@ -17,6 +17,8 @@ public sealed class DemoPlugin : IDalamudPlugin
     [PluginService] public static IObjectTable Objects { get; private set; } = null!;
     [PluginService] public static ITargetManager TargetManager { get; private set; } = null!;
     [PluginService] public static IPluginLog Log { get; private set; } = null!;
+    [PluginService] public static IGameGui GameGui { get; private set; } = null!;
+    [PluginService] internal static ITextureProvider TextureProvider { get; private set; } = null!;
 
     private readonly WindowSystem _windowSystem = new("PictomancyDemo");
     private DemoWindow? _window;

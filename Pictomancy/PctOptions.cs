@@ -33,4 +33,10 @@ public sealed class PctOptions
 
     /// <summary>Max sphere instances drawn per frame.</summary>
     public int MaxSpheres { get; init; } = 256;
+
+    /// <summary>Max image instances drawn per frame.</summary>
+    public int MaxImages { get; init; } = 256;
+
+    /// <summary>Max sprite instances drawn per frame.</summary>
+    public int MaxSprites { get; init; } = 256;
 }

@@ -1,3 +1,4 @@
+using Dalamud.Interface.Textures.TextureWraps;
 using Dalamud.Interface.Utility;
 using Pictomancy.DXDraw;
 using Pictomancy.ImGuiDraw;
@@ -316,5 +317,75 @@ public class PctDrawList : IDisposable
     public void AddSphere(Vector3 origin, float radius, uint color, PctDxParams? p = null)
     {
         _renderer.DrawSphere(origin, radius, color, p ?? DefaultParams);
+    }
+
+    /// <inheritdoc cref="AddImage"/>
+    public void AddImage(IDalamudTextureWrap textureWrap, Vector3 center, Vector3 right, Vector3 down, PctDxParams? p = null)
+    {
+        AddImage(textureWrap.Handle, center, right, down, p);
+    }
+
+    /// <inheritdoc cref="AddImage"/>
+    public void AddImage(ImTextureID textureId, Vector3 center, Vector3 right, Vector3 down, PctDxParams? p = null)
+    {
+        AddImage((nint)textureId.Handle, center, right, down, p);
+    }
+
+    /// <summary>
+    /// Draw a textured rectangle centered at <paramref name="center"/>. Corners are
+    /// <c>center +/- right/2 +/- down/2</c>.
+    /// U follows +right, V follows +down.
+    /// When <see cref="PctDxParams.ProjectionHeight"/> &gt; 0 the rectangle becomes a decal that
+    /// projects onto scene geometry within +/- ProjectionHeight/2 along the plane normal.
+    /// </summary>
+    /// <param name="right">Horizontal edge vector; length = image width.</param>
+    /// <param name="down">Vertical edge vector; length = image height.</param>
+    public void AddImage(nint nativePtr, Vector3 center, Vector3 right, Vector3 down, PctDxParams? p = null)
+    {
+        _renderer.DrawImage(nativePtr, center, right, down, p ?? DefaultParams);
+    }
+
+    /// <inheritdoc cref="AddSprite"/>
+    public void AddSprite(IDalamudTextureWrap textureWrap, Vector3 worldPosition, Vector2 screenSize, Vector2 offset = default, PctDxParams? p = null)
+    {
+        AddSprite(textureWrap.Handle, worldPosition, screenSize, offset, p);
+    }
+
+    /// <inheritdoc cref="AddSprite"/>
+    public void AddSprite(ImTextureID textureId, Vector3 worldPosition, Vector2 screenSize, Vector2 offset = default, PctDxParams? p = null)
+    {
+        AddSprite((nint)textureId.Handle, worldPosition, screenSize, offset, p);
+    }
+
+    /// <summary>
+    /// Draw a screen-sized camera-facing textured quad with center anchored at <paramref name="worldPosition"/>
+    /// </summary>
+    /// <param name="screenSize">Size in screen pixels.</param>
+    /// <param name="offset">Screen-pixel offset from the projected anchor (+Y down).</param>
+    public void AddSprite(nint nativePtr, Vector3 worldPosition, Vector2 screenSize, Vector2 offset = default, PctDxParams? p = null)
+    {
+        _renderer.DrawSprite(nativePtr, worldPosition, screenSize, offset, p ?? DefaultParams);
+    }
+
+    /// <inheritdoc cref="AddBillboard"/>
+    public void AddBillboard(IDalamudTextureWrap textureWrap, Vector3 worldPosition, Vector2 worldSize, PctDxParams? p = null)
+    {
+        AddBillboard(textureWrap.Handle, worldPosition, worldSize, p);
+    }
+
+    /// <inheritdoc cref="AddBillboard"/>
+    public void AddBillboard(ImTextureID textureId, Vector3 worldPosition, Vector2 worldSize, PctDxParams? p = null)
+    {
+        AddBillboard((nint)textureId.Handle, worldPosition, worldSize, p);
+    }
+
+    /// <summary>
+    /// Draw a world-sized camera-facing textured quad with center anchored at <paramref name="worldPosition"/>.
+    /// Size is in world meters and grows/shrinks with distance.
+    /// </summary>
+    /// <param name="worldSize">Size in world meters.</param>
+    public void AddBillboard(nint nativePtr, Vector3 worldPosition, Vector2 worldSize, PctDxParams? p = null)
+    {
+        _renderer.DrawBillboard(nativePtr, worldPosition, worldSize, p ?? DefaultParams);
     }
 }

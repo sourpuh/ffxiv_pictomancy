@@ -16,6 +16,8 @@ internal class DXRenderer : IDisposable
     public ProjectedTriFill? ProjectedTriFill { get; init; }
     public Stroke? Stroke { get; init; }
     public Sphere? Sphere { get; init; }
+    public Image? Image { get; init; }
+    public Sprite? Sprite { get; init; }
     public FullScreenPass FSP { get; init; }
     public ClipZone ClipZone { get; init; }
     //public UIMaskCapture? UIMaskCapture { get; private set; }
@@ -30,11 +32,15 @@ internal class DXRenderer : IDisposable
         Default,
         Fan,
         Tri,
+        Image,
     }
     private readonly List<(int Count, ProjectionType Type)> _projectedRuns = new();
 
     public SharpDX.Matrix ViewProj { get; private set; }
     public SharpDX.Vector2 ViewportSize { get; private set; }
+    // Diagonal projection scale (M11, M22) from the active camera; used to convert pixel sizes to world units.
+    public Vector2 ProjScale { get; private set; } = Vector2.One;
+    public Vector3 CameraPos { get; private set; } = Vector3.Zero;
 
     public bool FanDegraded => FanFill == null;
 
@@ -85,6 +91,22 @@ internal class DXRenderer : IDisposable
         catch (Exception e)
         {
             PctService.Log.Error(e, "[Pictomancy] Failed to compile sphere shader; sphere draws will be skipped.");
+        }
+        try
+        {
+            Image = new(RenderContext, options.MaxImages);
+        }
+        catch (Exception e)
+        {
+            PctService.Log.Error(e, "[Pictomancy] Failed to compile image shader; image draws will be skipped.");
+        }
+        try
+        {
+            Sprite = new(RenderContext, options.MaxSprites);
+        }
+        catch (Exception e)
+        {
+            PctService.Log.Error(e, "[Pictomancy] Failed to compile sprite shader; sprite draws will be skipped.");
         }
 
         // TriFill's buffer doubles as the fan-fallback path's storage in degraded mode.
@@ -145,6 +167,8 @@ internal class DXRenderer : IDisposable
         ProjectedTriFill?.Dispose();
         Stroke?.Dispose();
         Sphere?.Dispose();
+        Image?.Dispose();
+        Sprite?.Dispose();
         ClipZone.Dispose();
         FSP.Dispose();
         //UIMaskCapture?.Dispose();
@@ -155,9 +179,20 @@ internal class DXRenderer : IDisposable
 
     internal unsafe void BeginFrame()
     {
+        RenderContext.BeginFrame();
+
         var device = Device.Instance();
         ViewportSize = new(device->Width, device->Height);
         ViewProj = *(SharpDX.Matrix*)&Control.Instance()->ViewProjectionMatrix;
+
+        var sceneCamera = Control.Instance()->CameraManager.GetActiveCamera();
+        var renderCam = sceneCamera != null ? sceneCamera->SceneCamera.RenderCamera : null;
+        if (renderCam != null)
+        {
+            var proj = renderCam->ProjectionMatrix;
+            ProjScale = new Vector2(proj.M11, proj.M22);
+            CameraPos = renderCam->Origin;
+        }
 
         var rtm = FFXIVClientStructs.FFXIV.Client.Graphics.Render.RenderTargetManager.Instance();
         if (rtm != null && rtm->DepthStencil != null)
@@ -198,7 +233,18 @@ internal class DXRenderer : IDisposable
         TriFill.UpdateConstants(new() { ViewProj = ViewProj, PixelToUv = pixelToUv });
         FanFill?.UpdateConstants(new() { ViewProj = ViewProj, PixelToUv = pixelToUv });
         Stroke?.UpdateConstants(new() { ViewProj = ViewProj, RenderTargetSize = rtSize, PixelToUv = pixelToUv });
-        if (ProjectedFanFill?.HasPending == true || ProjectedTriFill?.HasPending == true || Sphere?.HasPending == true)
+
+        if (Sprite?.HasPending == true)
+        {
+            Sprite.UpdateConstants(new()
+            {
+                ViewProj = ViewProj,
+                RenderTargetSize = rtSize,
+                PixelToUv = pixelToUv,
+            });
+        }
+
+        if (ProjectedFanFill?.HasPending == true || ProjectedTriFill?.HasPending == true || Sphere?.HasPending == true || Image?.HasPending == true)
         {
             var invViewProj = ViewProj;
             invViewProj.Invert();
@@ -213,7 +259,7 @@ internal class DXRenderer : IDisposable
                     InvViewProj = invViewProj,
                     RenderTargetSize = rtSize,
                     PixelToUv = pixelToUv,
-                    CameraPos = cameraPos,
+                    CameraPos = CameraPos,
                 });
             }
             if (ProjectedTriFill?.HasPending == true)
@@ -224,7 +270,7 @@ internal class DXRenderer : IDisposable
                     InvViewProj = invViewProj,
                     RenderTargetSize = rtSize,
                     PixelToUv = pixelToUv,
-                    CameraPos = cameraPos,
+                    CameraPos = CameraPos,
                 });
             }
             if (Sphere?.HasPending == true)
@@ -235,12 +281,22 @@ internal class DXRenderer : IDisposable
                     InvViewProj = invViewProj,
                     RenderTargetSize = rtSize,
                     PixelToUv = pixelToUv,
-                    CameraPos = cameraPos,
+                    CameraPos = CameraPos,
+                });
+            }
+            if (Image?.HasPending == true)
+            {
+                Image.UpdateConstants(new()
+                {
+                    ViewProj = ViewProj,
+                    InvViewProj = invViewProj,
+                    RenderTargetSize = rtSize,
+                    PixelToUv = pixelToUv,
                 });
             }
         }
 
-        bool hasShapes = TriFill.HasPending || FanFill?.HasPending == true || ProjectedFanFill?.HasPending == true || ProjectedTriFill?.HasPending == true || Stroke?.HasPending == true || Sphere?.HasPending == true;
+        bool hasShapes = TriFill.HasPending || FanFill?.HasPending == true || ProjectedFanFill?.HasPending == true || ProjectedTriFill?.HasPending == true || Stroke?.HasPending == true || Sphere?.HasPending == true || Image?.HasPending == true || Sprite?.HasPending == true;
         if (hasShapes && sceneDepthSRV != null)
         {
             // DSV-only target with cleared stencil for the clip-zone pass.
@@ -267,6 +323,8 @@ internal class DXRenderer : IDisposable
         TriFill.Flush();
         FanFill?.Flush();
         Sphere?.Flush();
+        Image?.FlushFlat(CameraPos);
+        Sprite?.Flush(CameraPos);
         Stroke?.Flush();
 
         var device = Device.Instance();
@@ -308,9 +366,11 @@ internal class DXRenderer : IDisposable
     {
         ProjectedFanFill?.EndBuilder();
         ProjectedTriFill?.EndBuilder();
+        Image?.EndProjectedBuilder();
 
         int fanStart = 0;
         int triStart = 0;
+        int imageStart = 0;
         foreach (var (count, type) in _projectedRuns)
         {
             switch (type)
@@ -322,6 +382,10 @@ internal class DXRenderer : IDisposable
                 case ProjectionType.Tri:
                     ProjectedTriFill!.FlushRange(triStart, count);
                     triStart += count;
+                    break;
+                case ProjectionType.Image:
+                    Image!.FlushProjectedRange(imageStart, count);
+                    imageStart += count;
                     break;
             }
         }
@@ -415,6 +479,28 @@ internal class DXRenderer : IDisposable
     public void DrawSphere(Vector3 center, float radius, uint color, PctDxParams p)
     {
         Sphere?.Add(center, radius, color, p);
+    }
+
+    public void DrawImage(IntPtr nativePtr, Vector3 center, Vector3 right, Vector3 down, PctDxParams p)
+    {
+        if (Image == null) return;
+        Image.Add(nativePtr, center, right, down, p);
+        if (p.ProjectionHeight > 0f)
+            AppendProjectedRun(ProjectionType.Image);
+    }
+
+    public void DrawSprite(IntPtr nativePtr, Vector3 worldPosition, Vector2 screenSize, Vector2 offset, PctDxParams p)
+    {
+        Sprite?.Add(nativePtr, worldPosition, screenSize, offset, p);
+    }
+
+    public void DrawBillboard(IntPtr nativePtr, Vector3 worldPosition, Vector2 worldSize, PctDxParams p)
+    {
+        if (Sprite == null) return;
+        float w = worldPosition.X * ViewProj.M14 + worldPosition.Y * ViewProj.M24 + worldPosition.Z * ViewProj.M34 + ViewProj.M44;
+        if (w <= 0f) return;
+        var scale = new Vector2(ProjScale.X * ViewportSize.X, ProjScale.Y * ViewportSize.Y) * 0.5f / w;
+        Sprite.Add(nativePtr, worldPosition, worldSize * scale, Vector2.Zero, p);
     }
 
     private static unsafe SharpDX.Matrix ReadMatrix(IntPtr address)

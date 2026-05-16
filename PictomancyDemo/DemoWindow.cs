@@ -1,9 +1,10 @@
-using System.Diagnostics;
-using System.Numerics;
 using Dalamud.Bindings.ImGui;
+using Dalamud.Interface.Textures.TextureWraps;
 using Dalamud.Interface.Utility;
 using Dalamud.Interface.Windowing;
 using Pictomancy;
+using System.Diagnostics;
+using System.Numerics;
 
 namespace PictomancyDemo;
 
@@ -35,6 +36,8 @@ public sealed class DemoWindow : Window, IDisposable
     private readonly float[] _renderMsLinear = new float[PlotSamples];
     private int _renderMsIdx;
     private readonly Stopwatch _renderSw = new();
+
+    private static IDalamudTextureWrap? _iconWrap;
 
     public DemoWindow() : base("Pictomancy Demo", ImGuiWindowFlags.AlwaysAutoResize)
     {
@@ -102,6 +105,9 @@ public sealed class DemoWindow : Window, IDisposable
         if (ImGui.Button("Clip zone")) Spawn(new ClipZoneObject());
         ImGui.SameLine();
         if (ImGui.Button("Sphere")) Spawn(new SphereObject { Position = pos });
+        if (ImGui.Button("Image")) Spawn(new ImageObject { Position = pos });
+        ImGui.SameLine();
+        if (ImGui.Button("Sprite")) Spawn(new SpriteObject { Position = pos });
         ImGui.SameLine();
         if (ImGui.Button("Clear all")) _objects.Clear();
 
@@ -171,6 +177,8 @@ public sealed class DemoWindow : Window, IDisposable
 
         using var draw = PctService.Draw(hints: hints);
         if (draw is null) return;
+
+        _iconWrap ??= DemoPlugin.TextureProvider.GetFromGameIcon(61241).GetWrapOrEmpty();
 
         foreach (var obj in _objects)
             obj.DrawWorld(draw, hints.DefaultParams);
@@ -417,6 +425,77 @@ public sealed class DemoWindow : Window, IDisposable
                 var vpPos = ImGuiHelpers.MainViewport.Pos;
                 ImGui.GetForegroundDrawList().AddRect(vpPos + Min, vpPos + Max, 0xFF00FFFF);
             }
+        }
+    }
+
+    private class ImageObject : DemoObject
+    {
+        public float Width = 4f;
+        public float Height = 4f;
+        public bool Vertical = false;
+        public float Rotation = 0f;
+        public float ProjectionHeight = 0f;
+        public override string TypeName => "Image";
+        public override void DrawUi()
+        {
+            ImGui.SliderFloat("Width (m)", ref Width, 0.1f, 30f);
+            ImGui.SliderFloat("Height (m)", ref Height, 0.1f, 30f);
+            ImGui.Checkbox("Vertical (wall)", ref Vertical);
+            if (Vertical)
+                ImGui.SliderAngle("Rotation", ref Rotation);
+            ProjectionHeightSlider(ref ProjectionHeight);
+        }
+        public override void DrawWorld(PctDrawList draw, PctDxParams baseParams)
+        {
+            if (_iconWrap is null) return;
+            var p = baseParams with { ProjectionHeight = ProjectionHeight };
+
+            Vector3 right, down;
+            if (Vertical)
+            {
+                right = new Vector3(Width * MathF.Cos(Rotation), 0, -Width * MathF.Sin(Rotation));
+                down = new Vector3(0, -Height, 0);
+            }
+            else
+            {
+                right = new Vector3(Width, 0, 0);
+                down = new Vector3(0, 0, Height);
+            }
+
+            draw.AddImage(_iconWrap.Handle, Position, right, down, p);
+        }
+    }
+
+    private class SpriteObject : DemoObject
+    {
+        public bool Billboard = false;
+        public Vector2 SizePx = new(64, 64);
+        public Vector2 OffsetPx = Vector2.Zero;
+        public Vector2 SizeMeters = new(1f, 1f);
+        public float HeightOffset = 1.5f;
+        public override string TypeName => "Sprite";
+        public override void DrawUi()
+        {
+            ImGui.Checkbox("Billboard (world-units, scales with distance)", ref Billboard);
+            if (Billboard)
+            {
+                ImGui.SliderFloat2("Size (m)", ref SizeMeters, 0.05f, 10f);
+            }
+            else
+            {
+                ImGui.SliderFloat2("Size (px)", ref SizePx, 1f, 512f);
+                ImGui.SliderFloat2("Offset (px, +y = down)", ref OffsetPx, -400f, 400f);
+            }
+            ImGui.SliderFloat("Height offset (m)", ref HeightOffset, 0f, 5f);
+        }
+        public override void DrawWorld(PctDrawList draw, PctDxParams baseParams)
+        {
+            if (_iconWrap is null) return;
+            var anchor = Position + new Vector3(0, HeightOffset, 0);
+            if (Billboard)
+                draw.AddBillboard(_iconWrap.Handle, anchor, SizeMeters, baseParams);
+            else
+                draw.AddSprite(_iconWrap.Handle, anchor, SizePx, OffsetPx, baseParams);
         }
     }
 }
