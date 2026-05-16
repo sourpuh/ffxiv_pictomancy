@@ -245,6 +245,7 @@ internal unsafe class UIMaskCapture : IDisposable
         snapDesc.CpuAccessFlags = CpuAccessFlags.None;
         snapDesc.OptionFlags    = ResourceOptionFlags.None;
         snapDesc.Usage          = ResourceUsage.Default;
+        snapDesc.Format         = snapDesc.Format.ToUNorm();
 
         _snapshot = new(_ctx.Device, snapDesc);
         _snapshotSRV = new(_ctx.Device, _snapshot);
@@ -297,6 +298,7 @@ internal unsafe class UIMaskCapture : IDisposable
         copyDesc.CpuAccessFlags = CpuAccessFlags.None;
         copyDesc.OptionFlags = ResourceOptionFlags.None;
         copyDesc.Usage = ResourceUsage.Default;
+        copyDesc.Format = copyDesc.Format.ToUNorm();
 
         _bbCopy = new(_ctx.Device, copyDesc);
         _bbCopySRV = new(_ctx.Device, _bbCopy);
