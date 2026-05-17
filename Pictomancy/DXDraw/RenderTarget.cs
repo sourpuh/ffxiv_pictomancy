@@ -141,6 +141,7 @@ internal class RenderTarget : IDisposable
 
             var copyDesc = backBufferDesc;
             copyDesc.BindFlags = BindFlags.ShaderResource;
+            copyDesc.Format = copyDesc.Format.ToUNorm();
             _backBufferCopy = new Texture2D(device, copyDesc);
             _backBufferSRV = new ShaderResourceView(device, _backBufferCopy);
         }
